@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import BottomNav from "@/components/ui/BottomNav";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
+import InstallPrompt from "@/components/ui/InstallPrompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -98,6 +99,7 @@ export default function RootLayout({
         </main>
         <BottomNav />
         <ServiceWorkerRegistration />
+        <InstallPrompt /> 
       </body>
     </html>
   );
