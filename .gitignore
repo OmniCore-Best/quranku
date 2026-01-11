@@ -19,6 +19,8 @@
 
 # production
 /build
+backup.js
+backup.md
 
 # misc
 .DS_Store
