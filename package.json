@@ -9,10 +9,14 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@kmaslesa/tajweed": "^1.0.0",
+    "framer-motion": "^12.26.0",
     "next": "^16.1.1",
+    "node-addon-api": "^8.5.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "react-icons": "^5.5.0"
+    "react-icons": "^5.5.0",
+    "react-swipeable": "^7.0.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
