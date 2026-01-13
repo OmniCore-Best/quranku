@@ -19,7 +19,9 @@ import {
   FaDownload,
   FaCheck,
   FaRegBookmark,
-  FaRegCopy
+  FaRegCopy,
+  FaExclamationTriangle,
+  FaCheckCircle
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, SurahDetail, ReadingProgress } from '@/lib/db';
@@ -55,6 +57,9 @@ export default function SurahDetailPage() {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [offlineWarning, setOfflineWarning] = useState(false);
+  const [isCaching, setIsCaching] = useState(false);
+  const [cachedAyat, setCachedAyat] = useState<number[]>([]);
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,8 +69,15 @@ export default function SurahDetailPage() {
   useEffect(() => {
     setIsOnline(navigator.onLine);
     
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      setIsOnline(true);
+      setOfflineWarning(false);
+    };
+    
+    const handleOffline = () => {
+      setIsOnline(false);
+      setOfflineWarning(true);
+    };
     
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -85,6 +97,7 @@ export default function SurahDetailPage() {
       fetchSurah();
       fetchTafsir();
       checkBookmarkStatus();
+      checkCachedAyat();
     }
   }, [params.nomor]);
 
@@ -92,7 +105,7 @@ export default function SurahDetailPage() {
     try {
       setLoading(true);
       
-      // Coba ambil dari cache
+      // SELALU ambil dari cache terlebih dahulu
       const cachedSurah = await db.surahDetail
         .where('nomor')
         .equals(Number(params.nomor))
@@ -105,55 +118,97 @@ export default function SurahDetailPage() {
           const firstQari = Object.values(cachedSurah.audioFull)[0];
           if (firstQari) setAudioUrl(firstQari as string);
         }
+        
+        // Jika sudah ada di cache, tetap loading = false
+        if (!isOnline) {
+          setLoading(false);
+          return;
+        }
       }
   
-      // Jika online, fetch data terbaru
+      // Jika online, fetch data terbaru sebagai update
       if (isOnline) {
-        const response = await fetch(
-          `https://api.devnova.icu/api/islamic/al-quran/${params.nomor}?language=id`
-        );
-        const apiData = await response.json(); // Ganti nama variabel dari data ke apiData
-        
-        if (apiData.code === 200) {
-          setSurah(apiData.data);
-          setIsSurahCached(true);
-          if (apiData.data.audioFull) {
-            const firstQari = Object.values(apiData.data.audioFull)[0];
-            if (firstQari) setAudioUrl(firstQari as string);
-          }
+        try {
+          const response = await fetch(
+            `https://api.devnova.icu/api/islamic/al-quran/${params.nomor}?language=id`
+          );
           
-          // Simpan ke cache
-          try {
-            await db.surahDetail.put({
-              ...apiData.data, // Gunakan apiData.data
-              id: apiData.data.nomor,
-              updatedAt: new Date()
-            });
-          } catch (cacheError) {
-            console.error('Error saving to cache:', cacheError);
+          if (response.status === 200) {
+            const apiData = await response.json();
+            
+            if (apiData.code === 200) {
+              setSurah(apiData.data);
+              setIsSurahCached(true);
+              if (apiData.data.audioFull) {
+                const firstQari = Object.values(apiData.data.audioFull)[0];
+                if (firstQari) setAudioUrl(firstQari as string);
+              }
+              
+              // Simpan/update ke cache
+              try {
+                await db.surahDetail.put({
+                  ...apiData.data,
+                  id: apiData.data.nomor,
+                  updatedAt: new Date()
+                });
+              } catch (cacheError) {
+                console.error('Error saving to cache:', cacheError);
+              }
+            }
+          }
+        } catch (fetchError) {
+          console.error('Error fetching from API:', fetchError);
+          // Tetap gunakan cache jika gagal fetch
+          if (!cachedSurah) {
+            throw new Error('Cannot fetch data');
           }
         }
       } else if (!cachedSurah) {
-        // Offline dan tidak ada cache
         throw new Error('Data tidak tersedia offline');
       }
     } catch (error) {
       console.error('Error fetching surah:', error);
+      setOfflineWarning(true);
     } finally {
       setLoading(false);
     }
   };
-
+  
   const fetchTafsir = async () => {
     try {
-      if (!isOnline) return;
+      // 1. SELALU ambil dari IndexedDB terlebih dahulu
+      const cachedTafsir = await db.getTafsir(Number(params.nomor));
       
-      const response = await fetch(
-        `https://api.devnova.icu/api/islamic/al-quran/${params.nomor}/tafsir`
-      );
-      const data = await response.json();
-      if (data.code === 200) {
-        setTafsir(data.data.tafsir || []);
+      // FIXED: cachedTafsir sekarang selalu array, tidak perlu cek type
+      if (cachedTafsir && cachedTafsir.length > 0) {
+        const formattedTafsir = cachedTafsir.map(t => ({
+          ayat: t.ayat,
+          teks: t.teks
+        }));
+        setTafsir(formattedTafsir);
+      }
+  
+      // 2. Jika online, fetch data terbaru dan update cache
+      if (isOnline) {
+        const response = await fetch(
+          `https://api.devnova.icu/api/islamic/al-quran/${params.nomor}/tafsir`
+        );
+        const data = await response.json();
+        if (data.code === 200) {
+          const newTafsir = data.data.tafsir || [];
+          setTafsir(newTafsir);
+          
+          // Simpan tafsir baru ke IndexedDB
+          if (newTafsir.length > 0) {
+            for (const tafsirAyat of newTafsir) {
+              await db.saveTafsir(
+                Number(params.nomor),
+                tafsirAyat.ayat,
+                tafsirAyat.teks
+              );
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching tafsir:', error);
@@ -166,6 +221,22 @@ export default function SurahDetailPage() {
       setIsBookmarked(!!progress && !progress.completed);
     } catch (error) {
       console.error('Error checking bookmark:', error);
+    }
+  };
+
+  const checkCachedAyat = async () => {
+    try {
+      const cachedSurah = await db.surahDetail
+        .where('nomor')
+        .equals(Number(params.nomor))
+        .first();
+      
+      if (cachedSurah) {
+        const ayatNumbers = cachedSurah.ayat.map(a => a.nomorAyat);
+        setCachedAyat(ayatNumbers);
+      }
+    } catch (error) {
+      console.error('Error checking cached ayat:', error);
     }
   };
 
@@ -186,25 +257,21 @@ export default function SurahDetailPage() {
     const isRightSwipe = distance < -minSwipeDistance;
 
     if (isLeftSwipe) {
-      // Swipe kiri: ayat berikutnya
       if (currentAyat < surah.jumlahAyat - 1) {
         const newAyatIndex = currentAyat + 1;
         setCurrentAyat(newAyatIndex);
-        saveReadingProgress(newAyatIndex + 1); // Perbaikan di sini
+        saveReadingProgress(newAyatIndex + 1);
       } else if (surah.suratSelanjutnya && typeof surah.suratSelanjutnya !== 'boolean') {
-        // Pindah ke surat berikutnya
         router.push(`/surah/${surah.suratSelanjutnya.nomor}`);
       }
     }
 
     if (isRightSwipe) {
-      // Swipe kanan: ayat sebelumnya
       if (currentAyat > 0) {
         const newAyatIndex = currentAyat - 1;
         setCurrentAyat(newAyatIndex);
-        saveReadingProgress(newAyatIndex + 1); // Perbaikan di sini
+        saveReadingProgress(newAyatIndex + 1);
       } else if (surah.suratSebelumnya) {
-        // Pindah ke surat sebelumnya
         router.push(`/surah/${surah.suratSebelumnya.nomor}`);
       }
     }
@@ -231,7 +298,12 @@ export default function SurahDetailPage() {
     if (isPlaying) {
       audioRef.current.pause();
     } else {
-      audioRef.current.play();
+      audioRef.current.play().catch(error => {
+        console.error('Error playing audio:', error);
+        if (!isOnline) {
+          alert('Audio tidak tersedia offline. Mohon nyalakan internet untuk mendengarkan.');
+        }
+      });
     }
     setIsPlaying(!isPlaying);
   };
@@ -246,15 +318,54 @@ export default function SurahDetailPage() {
 
   const handleBookmark = async () => {
     if (isBookmarked) {
-      // Remove bookmark
       await db.readingProgress
         .where('surahId')
         .equals(surah!.nomor)
         .delete();
       setIsBookmarked(false);
     } else {
-      // Add bookmark
       await saveReadingProgress(currentAyat + 1);
+    }
+  };
+
+  const handleCacheFullSurah = async () => {
+    if (!surah || !isOnline) return;
+    
+    setIsCaching(true);
+    try {
+      // Download tafsir lengkap jika belum ada
+      if (tafsir.length === 0) {
+        await fetchTafsir();
+      }
+      
+      // Pre-cache audio untuk surah ini
+      if (surah.audioFull) {
+        const cache = await caches.open('quran-audio-cache');
+        for (const [key, audioUrl] of Object.entries(surah.audioFull)) {
+          try {
+            const response = await fetch(audioUrl);
+            if (response.status === 200) {
+              await cache.put(audioUrl, response);
+            }
+          } catch (error) {
+            console.error(`Error caching audio ${key}:`, error);
+          }
+        }
+      }
+      
+      // Tampilkan feedback sukses
+      const event = new CustomEvent('showToast', {
+        detail: {
+          message: `Surah ${surah.namaLatin} telah di-cache sepenuhnya!`,
+          type: 'success'
+        }
+      });
+      window.dispatchEvent(event);
+      
+    } catch (error) {
+      console.error('Error caching surah:', error);
+    } finally {
+      setIsCaching(false);
     }
   };
 
@@ -274,11 +385,18 @@ export default function SurahDetailPage() {
       if (navigator.share && navigator.canShare(shareData)) {
         await navigator.share(shareData);
       } else {
-        // Fallback: copy to clipboard
         await navigator.clipboard.writeText(
           `${shareData.text}\n\n${shareData.url}`
         );
-        alert('Ayat telah disalin ke clipboard!');
+        
+        // Tampilkan feedback toast
+        const event = new CustomEvent('showToast', {
+          detail: {
+            message: 'Ayat telah disalin ke clipboard!',
+            type: 'success'
+          }
+        });
+        window.dispatchEvent(event);
       }
     } catch (error) {
       console.error('Error sharing:', error);
@@ -296,7 +414,7 @@ export default function SurahDetailPage() {
     try {
       await navigator.clipboard.writeText(textToCopy);
       
-      // Show temporary success feedback
+      // Tampilkan feedback visual
       const copyButton = document.querySelector('[title="Salin ayat"]');
       if (copyButton) {
         const originalIcon = copyButton.querySelector('.copy-icon');
@@ -309,9 +427,16 @@ export default function SurahDetailPage() {
           }, 2000);
         }
       }
+      
+      const event = new CustomEvent('showToast', {
+        detail: {
+          message: 'Ayat berhasil disalin!',
+          type: 'success'
+        }
+      });
+      window.dispatchEvent(event);
     } catch (error) {
       console.error('Error copying text:', error);
-      // Fallback untuk browser yang tidak support clipboard
       const textArea = document.createElement('textarea');
       textArea.value = textToCopy;
       document.body.appendChild(textArea);
@@ -321,41 +446,18 @@ export default function SurahDetailPage() {
     }
   };
 
-  const handleCacheSurah = async () => {
-    if (!surah || !isOnline) return;
-    
-    try {
-      // Simpan ke cache jika belum tersimpan
-      if (!isSurahCached) {
-        await db.surahDetail.put({
-          ...surah,
-          id: surah.nomor,
-          updatedAt: new Date()
-        });
-        setIsSurahCached(true);
-      }
-      
-      // Download tafsir juga
-      if (tafsir.length === 0) {
-        await fetchTafsir();
-      }
-    } catch (error) {
-      console.error('Error caching surah:', error);
-    }
-  };
-
   const currentTafsir = tafsir.find(t => t.ayat === currentAyat + 1);
 
   if (loading) {
     return (
       <div className="min-h-screen p-4">
         <div className="max-w-4xl mx-auto">
-          <div className="h-8 bg-gray-200 rounded w-32 mb-6 animate-pulse" />
+          <div className="h-8 bg-emerald-100 rounded w-32 mb-6 animate-pulse" />
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse">
-            <div className="h-6 bg-gray-200 rounded w-48 mb-4" />
-            <div className="h-4 bg-gray-200 rounded w-32 mb-6" />
-            <div className="h-64 bg-gray-200 rounded mb-6" />
-            <div className="h-8 bg-gray-200 rounded w-full" />
+            <div className="h-6 bg-emerald-100 rounded w-48 mb-4" />
+            <div className="h-4 bg-emerald-100 rounded w-32 mb-6" />
+            <div className="h-64 bg-emerald-100 rounded mb-6" />
+            <div className="h-8 bg-emerald-100 rounded w-full" />
           </div>
         </div>
       </div>
@@ -391,6 +493,33 @@ export default function SurahDetailPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white">
       <div className="max-w-4xl mx-auto">
+        {/* Offline Warning */}
+        <AnimatePresence>
+          {offlineWarning && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="px-4 pt-4"
+            >
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-3">
+                <FaExclamationTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-amber-800">
+                    <span className="font-medium">Mode offline aktif.</span> Anda melihat data yang tersimpan.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setOfflineWarning(false)}
+                  className="text-amber-600 hover:text-amber-800"
+                >
+                  <FaTimes className="w-4 h-4" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header */}
         <div className="sticky top-0 z-10 bg-gradient-to-b from-emerald-50 to-emerald-50/95 backdrop-blur-sm pt-4 pb-3 px-4">
           <div className="flex items-center justify-between mb-4">
@@ -402,22 +531,26 @@ export default function SurahDetailPage() {
               <span className="text-sm font-medium">Kembali</span>
             </button>
 
-            <div className="flex items-center gap-2">
-              {/* Cache Button */}
-              {isOnline && !isSurahCached && (
-                <button
-                  onClick={handleCacheSurah}
-                  className="p-2 rounded-lg hover:bg-emerald-100 transition text-emerald-700"
-                  title="Simpan untuk offline"
-                >
-                  <FaDownload className="w-5 h-5" />
-                </button>
+            <div className="flex items-center gap-1">
+              {!isOnline && isSurahCached && (
+                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700" title="Tersedia offline">
+                  <FaCheckCircle className="w-5 h-5" />
+                </div>
               )}
               
-              {isSurahCached && (
-                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
-                  <FaCloud className="w-5 h-5" />
-                </div>
+              {isOnline && (
+                <button
+                  onClick={handleCacheFullSurah}
+                  disabled={isCaching}
+                  className="p-2 rounded-lg hover:bg-emerald-100 transition text-emerald-700 disabled:opacity-50"
+                  title="Simpan lengkap untuk offline"
+                >
+                  {isCaching ? (
+                    <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <FaDownload className="w-5 h-5" />
+                  )}
+                </button>
               )}
               
               <button
@@ -528,13 +661,21 @@ export default function SurahDetailPage() {
                       {isSurahCached ? '✓ Tersimpan offline' : 'Hanya online'}
                     </span>
                   </div>
+                  {cachedAyat.length > 0 && (
+                    <div className="mt-2 text-sm">
+                      <span className="text-gray-500">Ayat tersimpan:</span>
+                      <span className="font-medium text-emerald-600 ml-2">
+                        {cachedAyat.length} dari {surah.jumlahAyat}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Main Content - Swipe Area */}
+        {/* Main Content */}
         <div
           ref={containerRef}
           className="px-4 pb-6"
@@ -569,7 +710,8 @@ export default function SurahDetailPage() {
 
               <button
                 onClick={handlePlayAudio}
-                className="p-3 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 transition shadow-md"
+                disabled={!audioUrl}
+                className="p-3 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isPlaying ? (
                   <FaPause className="w-4 h-4" />
@@ -682,11 +824,14 @@ export default function SurahDetailPage() {
                     index === currentAyat
                       ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-sm'
                       : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
-                  }`}
+                  } ${cachedAyat.includes(ayat.nomorAyat) ? 'ring-1 ring-emerald-300' : ''}`}
                 >
                   <span className="text-xs font-medium">{ayat.nomorAyat}</span>
                   {isBookmarked && index === currentAyat && (
                     <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-300 rounded-full" />
+                  )}
+                  {cachedAyat.includes(ayat.nomorAyat) && (
+                    <div className="absolute -top-0.5 -left-0.5 w-2 h-2 bg-emerald-400 rounded-full" />
                   )}
                 </button>
               ))}
@@ -719,9 +864,14 @@ export default function SurahDetailPage() {
         onEnded={() => setIsPlaying(false)}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
+        onError={(e) => {
+          console.error('Audio error:', e);
+          if (!isOnline) {
+            setIsPlaying(false);
+          }
+        }}
       />
 
-      {/* CSS for Arabic Font */}
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap');
         .font-arabic {
