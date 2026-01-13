@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { 
   FaArrowLeft, 
   FaBook, 
@@ -14,9 +14,15 @@ import {
   FaChevronLeft,
   FaChevronRight,
   FaTimes,
-  FaInfoCircle
+  FaInfoCircle,
+  FaCloud,
+  FaDownload,
+  FaCheck,
+  FaRegBookmark,
+  FaRegCopy
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
+import { db, SurahDetail, ReadingProgress } from '@/lib/db';
 
 interface Ayat {
   nomorAyat: number;
@@ -24,30 +30,6 @@ interface Ayat {
   teksLatin: string;
   teksIndonesia: string;
   audio: Record<string, string>;
-}
-
-interface SurahDetail {
-  nomor: number;
-  nama: string;
-  namaLatin: string;
-  jumlahAyat: number;
-  tempatTurun: string;
-  arti: string;
-  deskripsi: string;
-  audioFull: Record<string, string>;
-  ayat: Ayat[];
-  suratSebelumnya?: {
-    nomor: number;
-    nama: string;
-    namaLatin: string;
-    jumlahAyat: number;
-  };
-  suratSelanjutnya?: {
-    nomor: number;
-    nama: string;
-    namaLatin: string;
-    jumlahAyat: number;
-  } | boolean;
 }
 
 interface Tafsir {
@@ -58,6 +40,7 @@ interface Tafsir {
 export default function SurahDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [surah, setSurah] = useState<SurahDetail | null>(null);
   const [tafsir, setTafsir] = useState<Tafsir[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +51,10 @@ export default function SurahDetailPage() {
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const [showInfo, setShowInfo] = useState(false);
+  const [isSurahCached, setIsSurahCached] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -75,26 +62,80 @@ export default function SurahDetailPage() {
   const minSwipeDistance = 50;
 
   useEffect(() => {
+    setIsOnline(navigator.onLine);
+    
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
     if (params.nomor) {
+      const ayatFromUrl = searchParams.get('ayat');
+      if (ayatFromUrl) {
+        setCurrentAyat(parseInt(ayatFromUrl) - 1);
+      }
       fetchSurah();
       fetchTafsir();
+      checkBookmarkStatus();
     }
   }, [params.nomor]);
 
   const fetchSurah = async () => {
     try {
       setLoading(true);
-      const response = await fetch(
-        `https://api.devnova.icu/api/islamic/al-quran/${params.nomor}?language=id`
-      );
-      const data = await response.json();
-      if (data.code === 200) {
-        setSurah(data.data);
-        setCurrentAyat(0);
-        if (data.data.audioFull) {
-          const firstQari = Object.values(data.data.audioFull)[0];
+      
+      // Coba ambil dari cache
+      const cachedSurah = await db.surahDetail
+        .where('nomor')
+        .equals(Number(params.nomor))
+        .first();
+      
+      if (cachedSurah) {
+        setSurah(cachedSurah);
+        setIsSurahCached(true);
+        if (cachedSurah.audioFull) {
+          const firstQari = Object.values(cachedSurah.audioFull)[0];
           if (firstQari) setAudioUrl(firstQari as string);
         }
+      }
+  
+      // Jika online, fetch data terbaru
+      if (isOnline) {
+        const response = await fetch(
+          `https://api.devnova.icu/api/islamic/al-quran/${params.nomor}?language=id`
+        );
+        const apiData = await response.json(); // Ganti nama variabel dari data ke apiData
+        
+        if (apiData.code === 200) {
+          setSurah(apiData.data);
+          setIsSurahCached(true);
+          if (apiData.data.audioFull) {
+            const firstQari = Object.values(apiData.data.audioFull)[0];
+            if (firstQari) setAudioUrl(firstQari as string);
+          }
+          
+          // Simpan ke cache
+          try {
+            await db.surahDetail.put({
+              ...apiData.data, // Gunakan apiData.data
+              id: apiData.data.nomor,
+              updatedAt: new Date()
+            });
+          } catch (cacheError) {
+            console.error('Error saving to cache:', cacheError);
+          }
+        }
+      } else if (!cachedSurah) {
+        // Offline dan tidak ada cache
+        throw new Error('Data tidak tersedia offline');
       }
     } catch (error) {
       console.error('Error fetching surah:', error);
@@ -105,6 +146,8 @@ export default function SurahDetailPage() {
 
   const fetchTafsir = async () => {
     try {
+      if (!isOnline) return;
+      
       const response = await fetch(
         `https://api.devnova.icu/api/islamic/al-quran/${params.nomor}/tafsir`
       );
@@ -114,6 +157,15 @@ export default function SurahDetailPage() {
       }
     } catch (error) {
       console.error('Error fetching tafsir:', error);
+    }
+  };
+
+  const checkBookmarkStatus = async () => {
+    try {
+      const progress = await db.getReadingProgress(Number(params.nomor));
+      setIsBookmarked(!!progress && !progress.completed);
+    } catch (error) {
+      console.error('Error checking bookmark:', error);
     }
   };
 
@@ -136,7 +188,9 @@ export default function SurahDetailPage() {
     if (isLeftSwipe) {
       // Swipe kiri: ayat berikutnya
       if (currentAyat < surah.jumlahAyat - 1) {
-        setCurrentAyat(prev => prev + 1);
+        const newAyatIndex = currentAyat + 1;
+        setCurrentAyat(newAyatIndex);
+        saveReadingProgress(newAyatIndex + 1); // Perbaikan di sini
       } else if (surah.suratSelanjutnya && typeof surah.suratSelanjutnya !== 'boolean') {
         // Pindah ke surat berikutnya
         router.push(`/surah/${surah.suratSelanjutnya.nomor}`);
@@ -146,13 +200,30 @@ export default function SurahDetailPage() {
     if (isRightSwipe) {
       // Swipe kanan: ayat sebelumnya
       if (currentAyat > 0) {
-        setCurrentAyat(prev => prev - 1);
+        const newAyatIndex = currentAyat - 1;
+        setCurrentAyat(newAyatIndex);
+        saveReadingProgress(newAyatIndex + 1); // Perbaikan di sini
       } else if (surah.suratSebelumnya) {
         // Pindah ke surat sebelumnya
         router.push(`/surah/${surah.suratSebelumnya.nomor}`);
       }
     }
   }, [touchStart, touchEnd, currentAyat, surah, router]);
+
+  const saveReadingProgress = useCallback(async (ayatNumber: number) => {
+    if (!surah) return;
+    
+    try {
+      await db.saveReadingProgress(
+        surah.nomor,
+        surah.namaLatin,
+        ayatNumber
+      );
+      setIsBookmarked(true);
+    } catch (error) {
+      console.error('Error saving progress:', error);
+    }
+  }, [surah]);
 
   const handlePlayAudio = () => {
     if (!audioRef.current) return;
@@ -167,14 +238,115 @@ export default function SurahDetailPage() {
 
   const handleAyatClick = (index: number) => {
     setCurrentAyat(index);
+    saveReadingProgress(index + 1);
     if (containerRef.current) {
       containerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
+  const handleBookmark = async () => {
+    if (isBookmarked) {
+      // Remove bookmark
+      await db.readingProgress
+        .where('surahId')
+        .equals(surah!.nomor)
+        .delete();
+      setIsBookmarked(false);
+    } else {
+      // Add bookmark
+      await saveReadingProgress(currentAyat + 1);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!surah) return;
+    
+    setIsSharing(true);
+    const ayat = surah.ayat[currentAyat];
+    
+    const shareData = {
+      title: `${surah.namaLatin} Ayat ${ayat.nomorAyat} - quranku`,
+      text: `${ayat.teksArab}\n\n${ayat.teksIndonesia}\n\n— ${surah.namaLatin} (${surah.arti}) Ayat ${ayat.nomorAyat}\n\nBaca di quranku`,
+      url: window.location.href
+    };
+
+    try {
+      if (navigator.share && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+      } else {
+        // Fallback: copy to clipboard
+        await navigator.clipboard.writeText(
+          `${shareData.text}\n\n${shareData.url}`
+        );
+        alert('Ayat telah disalin ke clipboard!');
+      }
+    } catch (error) {
+      console.error('Error sharing:', error);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleCopyAyat = async () => {
+    if (!surah) return;
+    
+    const ayat = surah.ayat[currentAyat];
+    const textToCopy = `${ayat.teksArab}\n\n${ayat.teksIndonesia}\n\n— ${surah.namaLatin} Ayat ${ayat.nomorAyat}`;
+    
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      
+      // Show temporary success feedback
+      const copyButton = document.querySelector('[title="Salin ayat"]');
+      if (copyButton) {
+        const originalIcon = copyButton.querySelector('.copy-icon');
+        if (originalIcon) {
+          const originalHTML = originalIcon.innerHTML;
+          originalIcon.innerHTML = '<FaCheck className="w-4 h-4" />';
+          
+          setTimeout(() => {
+            originalIcon.innerHTML = originalHTML;
+          }, 2000);
+        }
+      }
+    } catch (error) {
+      console.error('Error copying text:', error);
+      // Fallback untuk browser yang tidak support clipboard
+      const textArea = document.createElement('textarea');
+      textArea.value = textToCopy;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
+  };
+
+  const handleCacheSurah = async () => {
+    if (!surah || !isOnline) return;
+    
+    try {
+      // Simpan ke cache jika belum tersimpan
+      if (!isSurahCached) {
+        await db.surahDetail.put({
+          ...surah,
+          id: surah.nomor,
+          updatedAt: new Date()
+        });
+        setIsSurahCached(true);
+      }
+      
+      // Download tafsir juga
+      if (tafsir.length === 0) {
+        await fetchTafsir();
+      }
+    } catch (error) {
+      console.error('Error caching surah:', error);
+    }
+  };
+
   const currentTafsir = tafsir.find(t => t.ayat === currentAyat + 1);
 
-  if (loading || !surah) {
+  if (loading) {
     return (
       <div className="min-h-screen p-4">
         <div className="max-w-4xl mx-auto">
@@ -184,6 +356,32 @@ export default function SurahDetailPage() {
             <div className="h-4 bg-gray-200 rounded w-32 mb-6" />
             <div className="h-64 bg-gray-200 rounded mb-6" />
             <div className="h-8 bg-gray-200 rounded w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!surah) {
+    return (
+      <div className="min-h-screen p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center py-12">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+              <FaCloud className="w-8 h-8 text-red-600" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Data Tidak Tersedia</h3>
+            <p className="text-gray-600 mb-4">
+              {isOnline 
+                ? 'Terjadi kesalahan saat memuat data.' 
+                : 'Anda sedang offline dan data ini belum tersimpan.'}
+            </p>
+            <button
+              onClick={() => router.back()}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+            >
+              Kembali
+            </button>
           </div>
         </div>
       </div>
@@ -205,16 +403,60 @@ export default function SurahDetailPage() {
             </button>
 
             <div className="flex items-center gap-2">
+              {/* Cache Button */}
+              {isOnline && !isSurahCached && (
+                <button
+                  onClick={handleCacheSurah}
+                  className="p-2 rounded-lg hover:bg-emerald-100 transition text-emerald-700"
+                  title="Simpan untuk offline"
+                >
+                  <FaDownload className="w-5 h-5" />
+                </button>
+              )}
+              
+              {isSurahCached && (
+                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
+                  <FaCloud className="w-5 h-5" />
+                </div>
+              )}
+              
+              <button
+                onClick={handleCopyAyat}
+                className="p-2 rounded-lg hover:bg-emerald-100 transition text-emerald-700"
+                title="Salin ayat"
+              >
+                <div className="copy-icon">
+                  <FaRegCopy className="w-5 h-5" />
+                </div>
+              </button>
+              
               <button
                 onClick={() => setShowInfo(!showInfo)}
                 className="p-2 rounded-lg hover:bg-emerald-100 transition text-emerald-700"
               >
                 <FaInfoCircle className="w-5 h-5" />
               </button>
-              <button className="p-2 rounded-lg hover:bg-emerald-100 transition text-emerald-700">
-                <FaBookmark className="w-5 h-5" />
+              
+              <button
+                onClick={handleBookmark}
+                className={`p-2 rounded-lg transition ${
+                  isBookmarked 
+                    ? 'bg-emerald-100 text-emerald-700' 
+                    : 'hover:bg-emerald-100 text-emerald-700'
+                }`}
+              >
+                {isBookmarked ? (
+                  <FaBookmark className="w-5 h-5" />
+                ) : (
+                  <FaRegBookmark className="w-5 h-5" />
+                )}
               </button>
-              <button className="p-2 rounded-lg hover:bg-emerald-100 transition text-emerald-700">
+              
+              <button 
+                onClick={handleShare}
+                disabled={isSharing}
+                className="p-2 rounded-lg hover:bg-emerald-100 transition text-emerald-700 disabled:opacity-50"
+              >
                 <FaShareAlt className="w-5 h-5" />
               </button>
             </div>
@@ -279,6 +521,14 @@ export default function SurahDetailPage() {
                 <p className="text-sm text-gray-600 leading-relaxed">
                   {surah.deskripsi.replace(/<[^>]*>/g, '')}
                 </p>
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Status:</span>
+                    <span className={`font-medium ${isSurahCached ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {isSurahCached ? '✓ Tersimpan offline' : 'Hanya online'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
@@ -388,7 +638,9 @@ export default function SurahDetailPage() {
             <button
               onClick={() => {
                 if (currentAyat > 0) {
-                  setCurrentAyat(prev => prev - 1);
+                  const newAyatIndex = currentAyat - 1;
+                  setCurrentAyat(newAyatIndex);
+                  saveReadingProgress(newAyatIndex + 1);
                 } else if (surah.suratSebelumnya) {
                   router.push(`/surah/${surah.suratSebelumnya.nomor}`);
                 }
@@ -403,7 +655,9 @@ export default function SurahDetailPage() {
             <button
               onClick={() => {
                 if (currentAyat < surah.jumlahAyat - 1) {
-                  setCurrentAyat(prev => prev + 1);
+                  const newAyatIndex = currentAyat + 1;
+                  setCurrentAyat(newAyatIndex);
+                  saveReadingProgress(newAyatIndex + 1);
                 } else if (surah.suratSelanjutnya && typeof surah.suratSelanjutnya !== 'boolean') {
                   router.push(`/surah/${surah.suratSelanjutnya.nomor}`);
                 }
@@ -424,13 +678,16 @@ export default function SurahDetailPage() {
                 <button
                   key={ayat.nomorAyat}
                   onClick={() => handleAyatClick(index)}
-                  className={`p-2 rounded-lg text-center transition ${
+                  className={`p-2 rounded-lg text-center transition relative ${
                     index === currentAyat
                       ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-sm'
                       : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
                   }`}
                 >
                   <span className="text-xs font-medium">{ayat.nomorAyat}</span>
+                  {isBookmarked && index === currentAyat && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-300 rounded-full" />
+                  )}
                 </button>
               ))}
             </div>
