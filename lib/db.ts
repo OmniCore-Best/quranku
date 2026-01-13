@@ -1,4 +1,4 @@
-import Dexie, { type EntityTable } from 'dexie';
+import Dexie from 'dexie';
 
 export interface QuranList {
   id: number;
@@ -62,20 +62,30 @@ export interface LastRead {
   timestamp: Date;
 }
 
+export interface Tafsir {
+  id?: number;
+  surahId: number;
+  ayat: number;
+  teks: string;
+  updatedAt: Date;
+}
+
 class QuranDatabase extends Dexie {
   quranList!: Dexie.Table<QuranList, number>;
   surahDetail!: Dexie.Table<SurahDetail, number>;
   readingProgress!: Dexie.Table<ReadingProgress, number>;
   lastRead!: Dexie.Table<LastRead, number>;
+  tafsir!: Dexie.Table<Tafsir, number>;
 
   constructor() {
     super('QuranDatabase');
     
-    this.version(3).stores({
+    this.version(4).stores({
       quranList: '++id, nomor, updatedAt',
       surahDetail: '++id, nomor, updatedAt',
       readingProgress: '++id, surahId, timestamp, [surahId+timestamp]',
-      lastRead: '++id, surahId, timestamp'
+      lastRead: '++id, surahId, timestamp',
+      tafsir: '++id, surahId, ayat, [surahId+ayat], updatedAt'
     });
   }
 
@@ -92,6 +102,11 @@ class QuranDatabase extends Dexie {
       .where('updatedAt')
       .below(threeDaysAgo)
       .delete();
+    
+    await this.tafsir
+      .where('updatedAt')
+      .below(threeDaysAgo)
+      .delete();
   }
 
   async saveReadingProgress(surahId: number, surahName: string, ayatNumber: number) {
@@ -103,7 +118,6 @@ class QuranDatabase extends Dexie {
       completed: false
     });
 
-    // Update last read
     await this.lastRead.clear();
     await this.lastRead.add({
       surahId,
@@ -118,13 +132,11 @@ class QuranDatabase extends Dexie {
   }
 
   async getReadingProgress(surahId: number) {
-    // Get all progress for this surah and sort manually
     const allProgress = await this.readingProgress
       .where('surahId')
       .equals(surahId)
       .toArray();
     
-    // Sort by timestamp descending (newest first)
     return allProgress.sort((a, b) => 
       b.timestamp.getTime() - a.timestamp.getTime()
     )[0] || null;
@@ -146,6 +158,56 @@ class QuranDatabase extends Dexie {
     return progress
       .filter(p => !p.completed)
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }
+
+  async saveTafsir(surahId: number, ayat: number, teks: string) {
+    await this.tafsir.put({
+      surahId,
+      ayat,
+      teks,
+      updatedAt: new Date()
+    });
+  }
+
+  // FIXED: Return type yang lebih spesifik
+  async getTafsir(surahId: number, ayat?: number): Promise<Tafsir[]> {
+    if (ayat !== undefined) {
+      const tafsir = await this.tafsir
+        .where('[surahId+ayat]')
+        .equals([surahId, ayat])
+        .first();
+      return tafsir ? [tafsir] : [];
+    } else {
+      return await this.tafsir
+        .where('surahId')
+        .equals(surahId)
+        .toArray();
+    }
+  }
+
+  // Method baru untuk mengambil tafsir tunggal
+  async getSingleTafsir(surahId: number, ayat: number): Promise<Tafsir | undefined> {
+    return await this.tafsir
+      .where('[surahId+ayat]')
+      .equals([surahId, ayat])
+      .first();
+  }
+
+  async getSurahCount() {
+    return await this.quranList.count();
+  }
+
+  async getTotalDownloadedData() {
+    const surahCount = await this.quranList.count();
+    const detailCount = await this.surahDetail.count();
+    const tafsirCount = await this.tafsir.count();
+    
+    return { surahCount, detailCount, tafsirCount };
+  }
+
+  async isAllDataDownloaded() {
+    const surahCount = await this.quranList.count();
+    return surahCount >= 114;
   }
 }
 
