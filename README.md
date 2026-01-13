@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/1f54c.svg" width="96" height="96" alt="Kaaba">
+<img src="https://quranku.devnova.icu/icons/icon-512x512.png" width="96" height="96" alt="icon">
 
-# ✨ Quranku
+# quranku
 
 ### Digital Revolution in Reading & Understanding the Quran
 
