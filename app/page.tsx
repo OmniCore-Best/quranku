@@ -312,8 +312,7 @@ export default function QuranPage() {
                   {isCached && (
                     <div className="absolute top-3 left-3 z-10">
                       <div className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-medium flex items-center gap-1">
-                        <FaCloud className="w-3 h-3" />
-                        <span>Tersimpan</span>
+                        <FaCloud className="w-2 h-2" />
                       </div>
                     </div>
                   )}
