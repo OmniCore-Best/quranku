@@ -41,7 +41,7 @@ const BottomNav = () => {
     { href: '/', label: 'Quran', icon: <FaQuran /> },
     { href: '/schedule', label: 'Schedule', icon: <FaRegClock /> },
     { href: '/tajwid', label: 'Tajwid', icon: <FaBookOpen /> },
-    { href: '/doa', label: 'Doa', icon: <FaHandsPraying /> },
+    { href: '/prayer', label: 'Doa', icon: <FaHandsPraying /> },
   ];
 
   const popupMenuItems: PopupItem[] = [

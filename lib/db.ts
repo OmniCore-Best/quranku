@@ -80,7 +80,7 @@ class QuranDatabase extends Dexie {
   constructor() {
     super('QuranDatabase');
     
-    this.version(4).stores({
+    this.version(14).stores({
       quranList: '++id, nomor, updatedAt',
       surahDetail: '++id, nomor, updatedAt',
       readingProgress: '++id, surahId, timestamp, [surahId+timestamp]',

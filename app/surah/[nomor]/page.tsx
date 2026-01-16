@@ -479,7 +479,7 @@ export default function SurahDetailPage() {
                 : 'Anda sedang offline dan data ini belum tersimpan.'}
             </p>
             <button
-              onClick={() => router.back()}
+              onClick={() => router.push('/')}
               className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
             >
               Kembali
