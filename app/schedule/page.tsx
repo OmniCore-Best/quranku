@@ -1160,25 +1160,30 @@ export default function SchedulePage() {
             {/* Next Prayer Highlight - Improved Design */}
             {schedule.today_schedule.next_prayer && (
               <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl p-6 mb-8 shadow-lg">
-                <div className="flex flex-col lg:flex-row items-center justify-between">
-                  <div className="mb-6 lg:mb-0 lg:mr-6 text-center lg:text-left">
-                    <div className="text-sm opacity-90 mb-2 flex items-center justify-center lg:justify-start gap-2">
+                
+                <div className="flex flex-col lg:flex-row items-center">
+                  
+                  {/* KIRI */}
+                  <div className="flex-1 mb-6 lg:mb-0 text-center lg:text-left flex flex-col items-center lg:items-start">
+                    <div className="text-sm opacity-90 mb-2 flex items-center gap-2">
                       <div className="p-1 bg-white/20 rounded">
                         <FaBell className="w-3 h-3" />
                       </div>
                       Sholat Selanjutnya
                     </div>
-                    <div className="flex flex-col lg:flex-row items-center gap-4">
-                      <div className="p-3 bg-white/20 rounded-full lg:mr-4">
+            
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-white/20 rounded-full">
                         <div className="p-2 bg-white/30 rounded-full">
                           {getPrayerIcon(schedule.today_schedule.next_prayer.name)}
                         </div>
                       </div>
+            
                       <div>
                         <div className="text-3xl font-bold mb-1">
                           {schedule.today_schedule.next_prayer.name}
                         </div>
-                        <div className="text-xl opacity-90 flex items-center gap-2">
+                        <div className="text-xl opacity-90 flex items-center gap-2 justify-center lg:justify-start">
                           <FaClock className="w-4 h-4" />
                           {formatTime(schedule.today_schedule.next_prayer.time_24h)}
                           <span className="text-sm opacity-75 ml-2">
@@ -1188,15 +1193,18 @@ export default function SchedulePage() {
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="text-center">
-                    <div className="text-sm opacity-90 mb-2 flex items-center justify-center gap-2">
+            
+                  {/* KANAN */}
+                  <div className="flex-1 text-center flex flex-col items-center">
+                    <div className="text-sm opacity-90 mb-2 flex items-center gap-2">
                       <FaClock className="w-3 h-3" />
                       Sisa Waktu
                     </div>
-                    <div className="text-3xl font-bold mb-4 bg-white/10 rounded-lg px-4 py-3">
+            
+                    <div className="text-3xl font-bold mb-4 bg-white/10 rounded-lg px-6 py-3 min-w-[220px]">
                       {getTimeRemaining(schedule.today_schedule.next_prayer.time_24h) || 'Waktu telah tiba'}
                     </div>
+            
                     <button
                       onClick={() => {
                         if (notificationSettings.enabled) {
@@ -1211,6 +1219,7 @@ export default function SchedulePage() {
                       Ingatkan Saya
                     </button>
                   </div>
+            
                 </div>
               </div>
             )}
