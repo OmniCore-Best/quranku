@@ -19,11 +19,14 @@ import {
   FaSun,
   FaCloudSun,
   FaCloudMoon,
-  FaStar
+  FaStar,
+  FaSave,
+  FaDatabase
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { db } from '@/lib/db';
 
 interface Province {
   name: string;
@@ -82,6 +85,12 @@ interface UserLocation {
   longitude?: number;
 }
 
+interface NotificationSettings {
+  enabled: boolean;
+  advanceMinutes: number;
+  prayerTypes: string[];
+}
+
 export default function SchedulePage() {
   // State management
   const [provinces, setProvinces] = useState<Province[]>([]);
@@ -106,13 +115,19 @@ export default function SchedulePage() {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [showMonthlyView, setShowMonthlyView] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
+    enabled: false,
+    advanceMinutes: 10,
+    prayerTypes: ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya']
+  });
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   // Check online status
   useEffect(() => {
-    setIsOnline(navigator.onLine);
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     
+    setIsOnline(navigator.onLine);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
@@ -134,6 +149,7 @@ export default function SchedulePage() {
   // Load initial data
   useEffect(() => {
     checkNotificationPermission();
+    loadNotificationSettings();
     loadUserLocation();
     fetchProvinces();
   }, []);
@@ -148,6 +164,53 @@ export default function SchedulePage() {
   const checkNotificationPermission = () => {
     if ('Notification' in window) {
       setNotificationPermission(Notification.permission);
+    }
+  };
+
+  const loadNotificationSettings = async () => {
+    try {
+      const saved = localStorage.getItem('prayerNotificationSettings');
+      if (saved) {
+        setNotificationSettings(JSON.parse(saved));
+      }
+      
+      // Cek subscription status
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        setIsSubscribed(!!subscription);
+      }
+    } catch (error) {
+      console.error('Error loading notification settings:', error);
+    }
+  };
+
+  const saveNotificationSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      localStorage.setItem('prayerNotificationSettings', JSON.stringify(notificationSettings));
+      
+      // Jika notification diaktifkan dan belum ada permission, minta permission
+      if (notificationSettings.enabled && notificationPermission !== 'granted') {
+        await requestNotificationPermission();
+      }
+      
+      // Jika notification diaktifkan dan permission sudah granted, subscribe
+      if (notificationSettings.enabled && notificationPermission === 'granted') {
+        await subscribeToPushNotifications();
+      }
+      
+      // Jika notification dimatikan, unsubscribe
+      if (!notificationSettings.enabled && isSubscribed) {
+        await unsubscribeFromPushNotifications();
+      }
+      
+      toast.success('Pengaturan notifikasi disimpan');
+    } catch (error) {
+      console.error('Error saving notification settings:', error);
+      toast.error('Gagal menyimpan pengaturan');
+    } finally {
+      setIsSavingSettings(false);
     }
   };
 
@@ -167,17 +230,7 @@ export default function SchedulePage() {
         });
         
         // Cari kota yang sesuai
-        const citiesResponse = await fetch(
-          `https://api.devnova.icu/api/islamic/prayer-time?type=cities&province=${location.province_slug}`
-        );
-        if (citiesResponse.ok) {
-          const citiesData = await citiesResponse.json();
-          const city = citiesData.data.cities.find((c: City) => c.slug === location.city_slug);
-          if (city) {
-            setSelectedCity(city);
-            setCities(citiesData.data.cities);
-          }
-        }
+        await fetchCities(location.province_slug, location.city_slug);
         setLoading(prev => ({ ...prev, location: false }));
         return;
       }
@@ -261,9 +314,6 @@ export default function SchedulePage() {
       'maluku utara': 'north-maluku',
       'papua': 'papua',
       'papua barat': 'west-papua',
-      'papua selatan': 'south-papua',
-      'papua tengah': 'central-papua',
-      'papua pegunungan': 'highland-papua',
       'aceh': 'aceh',
       'banten': 'banten'
     };
@@ -285,30 +335,7 @@ export default function SchedulePage() {
         setSelectedProvince(province);
         
         // Fetch cities untuk provinsi ini
-        const citiesResponse = await fetch(
-          `https://api.devnova.icu/api/islamic/prayer-time?type=cities&province=${provinceSlug}`
-        );
-        
-        if (citiesResponse.ok) {
-          const citiesData = await citiesResponse.json();
-          setCities(citiesData.data.cities);
-          
-          // Pilih kota pertama sebagai default
-          if (citiesData.data.cities.length > 0) {
-            const firstCity = citiesData.data.cities[0];
-            setSelectedCity(firstCity);
-            
-            // Simpan ke localStorage
-            const location: UserLocation = {
-              province: province.name,
-              province_slug: province.slug,
-              city: firstCity.name,
-              city_slug: firstCity.slug
-            };
-            setUserLocation(location);
-            localStorage.setItem('prayerLocation', JSON.stringify(location));
-          }
-        }
+        await fetchCities(provinceSlug);
       }
     } catch (error) {
       console.error('Auto select error:', error);
@@ -321,43 +348,137 @@ export default function SchedulePage() {
     setLoading(prev => ({ ...prev, provinces: true }));
     
     try {
-      const response = await fetch(
-        `https://api.devnova.icu/api/islamic/prayer-time?type=provinces&page=${page}`
-      );
+      // Coba ambil dari cache offline dulu
+      const cachedProvinces = localStorage.getItem('cachedProvinces');
+      const cacheTime = localStorage.getItem('cachedProvincesTime');
       
-      if (response.ok) {
-        const data = await response.json();
-        setProvinces(prev => page === 1 ? data.data.provinces : [...prev, ...data.data.provinces]);
-        setHasMoreProvinces(!!data.data.pagination?.has_next);
-        setCurrentPage(page);
+      if (cachedProvinces && cacheTime) {
+        const cacheDate = new Date(parseInt(cacheTime));
+        const now = new Date();
+        const oneWeek = 7 * 24 * 60 * 60 * 1000;
+        
+        if (now.getTime() - cacheDate.getTime() < oneWeek) {
+          setProvinces(JSON.parse(cachedProvinces));
+          setLoading(prev => ({ ...prev, provinces: false }));
+          
+          // Jika online, tetap fetch data terbaru di background
+          if (isOnline) {
+            fetchProvincesFromAPI(page);
+          }
+          return;
+        }
       }
+
+      // Jika offline dan tidak ada cache
+      if (!isOnline) {
+        toast.warning('Sedang offline, menggunakan data cache terakhir');
+        setLoading(prev => ({ ...prev, provinces: false }));
+        return;
+      }
+
+      await fetchProvincesFromAPI(page);
     } catch (error) {
       console.error('Error fetching provinces:', error);
       toast.error('Gagal memuat daftar provinsi');
-    } finally {
       setLoading(prev => ({ ...prev, provinces: false }));
     }
   };
 
-  const fetchCities = async (provinceSlug: string) => {
+  const fetchProvincesFromAPI = async (page: number = 1) => {
+    const response = await fetch(
+      `https://api.devnova.icu/api/islamic/prayer-time?type=provinces&page=${page}`
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      setProvinces(prev => page === 1 ? data.data.provinces : [...prev, ...data.data.provinces]);
+      setHasMoreProvinces(!!data.data.pagination?.has_next);
+      setCurrentPage(page);
+      
+      // Simpan ke cache
+      localStorage.setItem('cachedProvinces', JSON.stringify(data.data.provinces));
+      localStorage.setItem('cachedProvincesTime', Date.now().toString());
+    }
+  };
+
+  const fetchCities = async (provinceSlug: string, targetCitySlug?: string) => {
     if (!provinceSlug || loading.cities) return;
     
     setLoading(prev => ({ ...prev, cities: true }));
     
     try {
-      const response = await fetch(
-        `https://api.devnova.icu/api/islamic/prayer-time?type=cities&province=${provinceSlug}`
-      );
+      // Cek cache offline
+      const cacheKey = `cachedCities_${provinceSlug}`;
+      const cachedCities = localStorage.getItem(cacheKey);
+      const cacheTime = localStorage.getItem(`${cacheKey}_time`);
       
-      if (response.ok) {
-        const data = await response.json();
-        setCities(data.data.cities);
+      if (cachedCities && cacheTime) {
+        const cacheDate = new Date(parseInt(cacheTime));
+        const now = new Date();
+        const oneWeek = 7 * 24 * 60 * 60 * 1000;
+        
+        if (now.getTime() - cacheDate.getTime() < oneWeek) {
+          const citiesData = JSON.parse(cachedCities);
+          setCities(citiesData);
+          
+          // Pilih kota jika ada target
+          if (targetCitySlug) {
+            const city = citiesData.find((c: City) => c.slug === targetCitySlug);
+            if (city) {
+              setSelectedCity(city);
+            }
+          } else if (citiesData.length > 0) {
+            setSelectedCity(citiesData[0]);
+          }
+          
+          setLoading(prev => ({ ...prev, cities: false }));
+          
+          // Jika online, fetch data terbaru di background
+          if (isOnline) {
+            fetchCitiesFromAPI(provinceSlug, targetCitySlug);
+          }
+          return;
+        }
       }
+
+      // Jika offline dan tidak ada cache
+      if (!isOnline) {
+        toast.warning('Sedang offline, menggunakan data cache terakhir');
+        setLoading(prev => ({ ...prev, cities: false }));
+        return;
+      }
+
+      await fetchCitiesFromAPI(provinceSlug, targetCitySlug);
     } catch (error) {
       console.error('Error fetching cities:', error);
       toast.error('Gagal memuat daftar kota');
-    } finally {
       setLoading(prev => ({ ...prev, cities: false }));
+    }
+  };
+
+  const fetchCitiesFromAPI = async (provinceSlug: string, targetCitySlug?: string) => {
+    const response = await fetch(
+      `https://api.devnova.icu/api/islamic/prayer-time?type=cities&province=${provinceSlug}`
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      setCities(data.data.cities);
+      
+      // Simpan ke cache
+      const cacheKey = `cachedCities_${provinceSlug}`;
+      localStorage.setItem(cacheKey, JSON.stringify(data.data.cities));
+      localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
+      
+      // Pilih kota jika ada target
+      if (targetCitySlug) {
+        const city = data.data.cities.find((c: City) => c.slug === targetCitySlug);
+        if (city) {
+          setSelectedCity(city);
+        }
+      } else if (data.data.cities.length > 0) {
+        setSelectedCity(data.data.cities[0]);
+      }
     }
   };
 
@@ -367,59 +488,113 @@ export default function SchedulePage() {
     setLoading(prev => ({ ...prev, schedule: true }));
     
     try {
-      // Cek cache di Supabase terlebih dahulu
+      // Cek cache offline
+      const cacheKey = `prayerSchedule_${selectedProvince.slug}_${selectedCity.slug}`;
+      const cachedSchedule = localStorage.getItem(cacheKey);
+      const cacheTime = localStorage.getItem(`${cacheKey}_time`);
       const today = new Date().toISOString().split('T')[0];
-      const { data: cachedData } = await supabase
-        .from('prayer_schedule_cache')
-        .select('schedule_data')
-        .eq('province_slug', selectedProvince.slug)
-        .eq('city_slug', selectedCity.slug)
-        .eq('date', today)
-        .single();
+      
+      if (cachedSchedule && cacheTime) {
+        const cacheDate = new Date(parseInt(cacheTime));
+        const now = new Date();
+        
+        // Cache valid untuk 24 jam
+        if (now.getTime() - cacheDate.getTime() < 24 * 60 * 60 * 1000) {
+          const scheduleData = JSON.parse(cachedSchedule);
+          
+          // Cek apakah data untuk hari ini
+          if (scheduleData.city?.date_today === today) {
+            setSchedule(scheduleData);
+            setLoading(prev => ({ ...prev, schedule: false }));
+            
+            // Jika online, fetch data terbaru di background
+            if (isOnline) {
+              fetchScheduleFromAPI();
+            }
+            return;
+          }
+        }
+      }
 
-      if (cachedData && isOnline) {
-        setSchedule(cachedData.schedule_data);
+      // Jika offline dan tidak ada cache valid
+      if (!isOnline) {
+        toast.warning('Sedang offline, menggunakan data cache terakhir');
         setLoading(prev => ({ ...prev, schedule: false }));
         return;
       }
 
-      // Fetch dari API
-      const response = await fetch(
-        `https://api.devnova.icu/api/islamic/prayer-time?type=schedule&province=${selectedProvince.slug}&city=${selectedCity.slug}`
-      );
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSchedule(data.data);
-        
-        // Cache ke Supabase jika online
-        if (isOnline) {
-          await supabase
-            .from('prayer_schedule_cache')
-            .upsert({
-              province_slug: selectedProvince.slug,
-              city_slug: selectedCity.slug,
-              date: today,
-              schedule_data: data.data,
-              updated_at: new Date().toISOString()
-            });
-        }
-        
-        // Simpan lokasi terpilih
-        const location: UserLocation = {
-          province: selectedProvince.name,
-          province_slug: selectedProvince.slug,
-          city: selectedCity.name,
-          city_slug: selectedCity.slug
-        };
-        setUserLocation(location);
-        localStorage.setItem('prayerLocation', JSON.stringify(location));
-      }
+      await fetchScheduleFromAPI();
     } catch (error) {
       console.error('Error fetching schedule:', error);
       toast.error('Gagal memuat jadwal sholat');
-    } finally {
       setLoading(prev => ({ ...prev, schedule: false }));
+    }
+  };
+
+  const fetchScheduleFromAPI = async () => {
+    if (!selectedProvince || !selectedCity) return;
+    
+    const response = await fetch(
+      `https://api.devnova.icu/api/islamic/prayer-time?type=schedule&province=${selectedProvince.slug}&city=${selectedCity.slug}`
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      setSchedule(data.data);
+      
+      // Simpan ke cache
+      const cacheKey = `prayerSchedule_${selectedProvince.slug}_${selectedCity.slug}`;
+      localStorage.setItem(cacheKey, JSON.stringify(data.data));
+      localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
+      
+      // Simpan lokasi terpilih
+      const location: UserLocation = {
+        province: selectedProvince.name,
+        province_slug: selectedProvince.slug,
+        city: selectedCity.name,
+        city_slug: selectedCity.slug
+      };
+      setUserLocation(location);
+      localStorage.setItem('prayerLocation', JSON.stringify(location));
+      
+      // Simpan ke Supabase untuk notifikasi
+      if (notificationSettings.enabled && isSubscribed) {
+        await schedulePrayerNotifications();
+      }
+    }
+  };
+
+  const schedulePrayerNotifications = async () => {
+    if (!schedule || !selectedProvince || !selectedCity) return;
+    
+    try {
+      // Simpan jadwal untuk notifikasi di Service Worker
+      const prayerNotifications = schedule.today_schedule.prayers
+        .filter(prayer => notificationSettings.prayerTypes.includes(prayer.name.toLowerCase()))
+        .map(prayer => ({
+          name: prayer.name,
+          time: prayer.time_24h,
+          advanceMinutes: notificationSettings.advanceMinutes
+        }));
+      
+      // Kirim ke Service Worker
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SCHEDULE_PRAYER_NOTIFICATIONS',
+          data: {
+            prayers: prayerNotifications,
+            location: {
+              province: selectedProvince.name,
+              city: selectedCity.name
+            }
+          }
+        });
+        
+        // Simpan ke localStorage untuk Service Worker
+        localStorage.setItem('prayerNotifications', JSON.stringify(prayerNotifications));
+      }
+    } catch (error) {
+      console.error('Error scheduling notifications:', error);
     }
   };
 
@@ -427,12 +602,14 @@ export default function SchedulePage() {
     setSelectedProvince(province);
     setSelectedCity(null);
     setShowProvinceDropdown(false);
+    setSearchQuery('');
     fetchCities(province.slug);
   };
 
   const handleCitySelect = (city: City) => {
     setSelectedCity(city);
     setShowCityDropdown(false);
+    setSearchQuery('');
   };
 
   const requestNotificationPermission = async () => {
@@ -461,27 +638,60 @@ export default function SchedulePage() {
     try {
       const registration = await navigator.serviceWorker.ready;
       
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-      });
-
-      // Simpan subscription ke Supabase
-      const { error } = await supabase
-        .from('push_subscriptions')
-        .upsert({
-          endpoint: subscription.endpoint,
-          p256dh: btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('p256dh')!))),
-          auth: btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('auth')!))),
-          enabled: true
-        });
-
-      if (error) throw error;
+      // Cek apakah sudah subscribe
+      let subscription = await registration.pushManager.getSubscription();
       
-      setIsSubscribed(true);
+      if (!subscription) {
+        // Subscribe baru
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        });
+      }
+      
+      // Kirim subscription ke server
+      const response = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(subscription),
+      });
+      
+      if (response.ok) {
+        setIsSubscribed(true);
+        console.log('Push subscription berhasil');
+      } else {
+        console.error('Gagal mengirim subscription ke server');
+      }
     } catch (error) {
       console.error('Error subscribing to push:', error);
-      throw error;
+      toast.error('Gagal mendaftarkan notifikasi push');
+    }
+  };
+
+  const unsubscribeFromPushNotifications = async () => {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      
+      if (subscription) {
+        await subscription.unsubscribe();
+        
+        // Hapus dari server
+        await fetch('/api/push/subscribe', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        
+        setIsSubscribed(false);
+        console.log('Push subscription dihentikan');
+      }
+    } catch (error) {
+      console.error('Error unsubscribing from push:', error);
     }
   };
 
@@ -542,6 +752,16 @@ export default function SchedulePage() {
     city.slug.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const togglePrayerType = (prayerType: string) => {
+    setNotificationSettings(prev => {
+      const prayerTypes = prev.prayerTypes.includes(prayerType)
+        ? prev.prayerTypes.filter(type => type !== prayerType)
+        : [...prev.prayerTypes, prayerType];
+      
+      return { ...prev, prayerTypes };
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white p-4">
       <div className="max-w-4xl mx-auto">
@@ -567,15 +787,20 @@ export default function SchedulePage() {
               )}
               
               <button
-                onClick={requestNotificationPermission}
+                onClick={() => {
+                  setNotificationSettings(prev => ({
+                    ...prev,
+                    enabled: !prev.enabled
+                  }));
+                }}
                 className={`p-2 rounded-full transition ${
-                  notificationPermission === 'granted'
+                  notificationSettings.enabled
                     ? 'bg-green-100 text-green-700'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
-                title={notificationPermission === 'granted' ? 'Notifikasi aktif' : 'Aktifkan notifikasi'}
+                title={notificationSettings.enabled ? 'Notifikasi aktif' : 'Aktifkan notifikasi'}
               >
-                {notificationPermission === 'granted' ? (
+                {notificationSettings.enabled ? (
                   <FaBell className="w-5 h-5" />
                 ) : (
                   <FaBellSlash className="w-5 h-5" />
@@ -802,7 +1027,7 @@ export default function SchedulePage() {
           </div>
         ) : schedule ? (
           <>
-            {/* Today's Prayer Times */}
+            {/* Today's Prayer Times - Horizontal Grid */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-gray-900">Jadwal Hari Ini</h2>
@@ -816,7 +1041,7 @@ export default function SchedulePage() {
               </div>
 
               {!showMonthlyView ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                   {schedule.today_schedule.prayers.map((prayer) => {
                     const timeRemaining = getTimeRemaining(prayer.time_24h);
                     const isNextPrayer = prayer.is_next;
@@ -824,47 +1049,42 @@ export default function SchedulePage() {
                     return (
                       <div
                         key={prayer.name}
-                        className={`rounded-xl p-4 border transition-all ${
+                        className={`rounded-xl p-4 border transition-all min-w-[140px] ${
                           isNextPrayer
                             ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white border-blue-600 transform scale-105 shadow-lg'
                             : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-md'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className={`p-2 rounded-lg ${
+                        <div className="flex flex-col items-center text-center">
+                          <div className={`p-2 rounded-lg mb-2 ${
                             isNextPrayer ? 'bg-white/20' : 'bg-blue-50'
                           }`}>
                             {getPrayerIcon(prayer.name)}
                           </div>
-                          {isNextPrayer && (
-                            <span className="text-xs font-medium bg-white/30 px-2 py-1 rounded-full">
-                              SELANJUTNYA
-                            </span>
+                          
+                          <div className="mb-1">
+                            <div className={`text-lg font-bold ${
+                              isNextPrayer ? 'text-white' : 'text-gray-900'
+                            }`}>
+                              {formatTime(prayer.time_24h)}
+                            </div>
+                            <div className={`text-sm ${
+                              isNextPrayer ? 'text-blue-100' : 'text-gray-600'
+                            }`}>
+                              {prayer.time_24h}
+                            </div>
+                          </div>
+                          
+                          <div className="text-xs font-medium opacity-90 mb-2">
+                            {prayer.name}
+                          </div>
+                          
+                          {timeRemaining && isNextPrayer && (
+                            <div className="text-xs bg-white/20 rounded-lg px-2 py-1 mt-1">
+                              ⏳ {timeRemaining} lagi
+                            </div>
                           )}
                         </div>
-                        
-                        <div className="mb-1">
-                          <div className={`text-lg font-bold ${
-                            isNextPrayer ? 'text-white' : 'text-gray-900'
-                          }`}>
-                            {formatTime(prayer.time_24h)}
-                          </div>
-                          <div className={`text-sm ${
-                            isNextPrayer ? 'text-blue-100' : 'text-gray-600'
-                          }`}>
-                            {prayer.time_24h}
-                          </div>
-                        </div>
-                        
-                        <div className="text-xs font-medium opacity-90 mb-2">
-                          {prayer.name}
-                        </div>
-                        
-                        {timeRemaining && isNextPrayer && (
-                          <div className="text-xs bg-white/20 rounded-lg px-2 py-1 mt-2">
-                            ⏳ {timeRemaining} lagi
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -900,7 +1120,7 @@ export default function SchedulePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {schedule.monthly_schedule.map((day) => (
+                        {schedule.monthly_schedule.slice(0, 10).map((day) => (
                           <tr
                             key={day.date}
                             className={`hover:bg-gray-50 ${
@@ -914,7 +1134,7 @@ export default function SchedulePage() {
                                     ? 'bg-blue-600 text-white'
                                     : 'bg-gray-100 text-gray-700'
                                 }`}>
-                                  {day.date}
+                                  {day.date.split('-')[2]}
                                 </div>
                                 <div className="text-xs text-gray-500">
                                   {day.hijri_date.trim()}
@@ -937,28 +1157,45 @@ export default function SchedulePage() {
               )}
             </div>
 
-            {/* Next Prayer Highlight */}
+            {/* Next Prayer Highlight - Improved Design */}
             {schedule.today_schedule.next_prayer && (
-              <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl p-6 mb-8 shadow-lg">
-                <div className="flex flex-col sm:flex-row items-center justify-between">
-                  <div className="mb-4 sm:mb-0">
-                    <div className="text-sm opacity-90 mb-1">Sholat Selanjutnya</div>
-                    <div className="text-3xl font-bold mb-1">
-                      {schedule.today_schedule.next_prayer.name}
+              <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl p-6 mb-8 shadow-lg">
+                <div className="flex flex-col lg:flex-row items-center justify-between">
+                  <div className="mb-6 lg:mb-0 lg:mr-6 text-center lg:text-left">
+                    <div className="text-sm opacity-90 mb-2">Sholat Selanjutnya</div>
+                    <div className="text-4xl font-bold mb-2 flex items-center justify-center lg:justify-start gap-3">
+                      <div className="p-3 bg-white/20 rounded-full">
+                        {getPrayerIcon(schedule.today_schedule.next_prayer.name)}
+                      </div>
+                      <div>
+                        <div>{schedule.today_schedule.next_prayer.name}</div>
+                        <div className="text-xl mt-1 opacity-90">
+                          {formatTime(schedule.today_schedule.next_prayer.time_24h)}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-lg">
-                      {formatTime(schedule.today_schedule.next_prayer.time_24h)}
+                    <div className="text-sm opacity-80">
+                      ⏰ {schedule.today_schedule.next_prayer.time_24h}
                     </div>
                   </div>
                   
-                  <div className="text-center sm:text-right">
-                    <div className="text-sm opacity-90 mb-1">Sisa Waktu</div>
-                    <div className="text-2xl font-bold">
+                  <div className="text-center">
+                    <div className="text-sm opacity-90 mb-2">Sisa Waktu</div>
+                    <div className="text-3xl font-bold mb-2">
                       {getTimeRemaining(schedule.today_schedule.next_prayer.time_24h) || 'Waktu telah tiba'}
                     </div>
-                    <div className="text-sm mt-2">
-                      ⏰ {schedule.today_schedule.next_prayer.time_24h}
-                    </div>
+                    <button
+                      onClick={() => {
+                        if (notificationSettings.enabled) {
+                          toast.success(`Pengingat untuk ${schedule.today_schedule.next_prayer.name} telah diatur`);
+                        } else {
+                          toast.info('Aktifkan notifikasi untuk mendapatkan pengingat');
+                        }
+                      }}
+                      className="px-6 py-2 bg-white text-emerald-700 rounded-lg font-bold hover:bg-gray-100 transition"
+                    >
+                      Ingatkan Saya
+                    </button>
                   </div>
                 </div>
               </div>
@@ -976,8 +1213,7 @@ export default function SchedulePage() {
                     <div className="text-xl font-bold text-gray-900">
                       {currentTime.toLocaleTimeString('id-ID', {
                         hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit'
+                        minute: '2-digit'
                       })}
                     </div>
                   </div>
@@ -987,9 +1223,9 @@ export default function SchedulePage() {
                   <div className="text-lg font-medium text-gray-900">
                     {currentTime.toLocaleDateString('id-ID', {
                       weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
                     })}
                   </div>
                 </div>
@@ -1004,15 +1240,31 @@ export default function SchedulePage() {
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               Pilih Provinsi dan Kota
             </h3>
-            <p className="text-gray-600">
+            <p className="text-gray-600 mb-4">
               Pilih provinsi dan kota untuk melihat jadwal sholat
             </p>
+            {!isOnline && (
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg">
+                <FaDatabase className="w-4 h-4" />
+                <span className="text-sm">Mode Offline - Data mungkin tidak terbaru</span>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Notification Settings */}
+        {/* Notification Settings - Improved with Save */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Pengaturan Notifikasi</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-900">Pengaturan Notifikasi</h3>
+            <button
+              onClick={saveNotificationSettings}
+              disabled={isSavingSettings}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              <FaSave className="w-4 h-4" />
+              {isSavingSettings ? 'Menyimpan...' : 'Simpan'}
+            </button>
+          </div>
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -1022,44 +1274,95 @@ export default function SchedulePage() {
                   Dapatkan pengingat sebelum waktu sholat
                 </div>
               </div>
-              <button
-                onClick={requestNotificationPermission}
-                className={`px-4 py-2 rounded-lg font-medium ${
-                  notificationPermission === 'granted'
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
-              >
-                {notificationPermission === 'granted' ? 'Aktif' : 'Aktifkan'}
-              </button>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={notificationSettings.enabled}
+                  onChange={(e) => {
+                    setNotificationSettings(prev => ({
+                      ...prev,
+                      enabled: e.target.checked
+                    }));
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
             </div>
             
-            {notificationPermission === 'granted' && (
+            {notificationSettings.enabled && (
               <div className="bg-gray-50 rounded-lg p-4">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {['Imsak', 'Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'].map((prayer) => (
-                    <label key={prayer} className="flex items-center space-x-2 p-2 hover:bg-white rounded cursor-pointer">
-                      <input
-                        type="checkbox"
-                        defaultChecked
-                        className="rounded text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700">{prayer}</span>
-                    </label>
-                  ))}
+                <div className="mb-4">
+                  <div className="font-medium text-gray-900 mb-2">Sholat yang diingatkan</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'].map((prayer) => (
+                      <label key={prayer} className="flex items-center space-x-2 p-2 hover:bg-white rounded cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={notificationSettings.prayerTypes.includes(prayer)}
+                          onChange={() => togglePrayerType(prayer)}
+                          className="rounded text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700 capitalize">{prayer}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 
-                <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="pt-4 border-t border-gray-200">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Peringatan sebelum waktu (menit)
                   </label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="5">5 menit</option>
-                    <option value="10" selected>10 menit</option>
-                    <option value="15">15 menit</option>
-                    <option value="30">30 menit</option>
-                  </select>
+                  <div className="flex items-center space-x-4">
+                    <input
+                      type="range"
+                      min="1"
+                      max="60"
+                      value={notificationSettings.advanceMinutes}
+                      onChange={(e) => setNotificationSettings(prev => ({
+                        ...prev,
+                        advanceMinutes: parseInt(e.target.value)
+                      }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <span className="text-lg font-bold text-blue-600 min-w-[3rem]">
+                      {notificationSettings.advanceMinutes} mnt
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500 mt-2">
+                    <span>1 menit</span>
+                    <span>60 menit</span>
+                  </div>
                 </div>
+                
+                {notificationPermission === 'granted' ? (
+                  <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <FaBell className="w-4 h-4 text-green-600" />
+                      <span className="text-sm text-green-700">
+                        Izin notifikasi telah diberikan
+                      </span>
+                    </div>
+                  </div>
+                ) : notificationPermission === 'denied' ? (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <FaBellSlash className="w-4 h-4 text-red-600" />
+                      <span className="text-sm text-red-700">
+                        Izin notifikasi ditolak. Harap aktifkan di pengaturan browser
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <FaBell className="w-4 h-4 text-amber-600" />
+                      <span className="text-sm text-amber-700">
+                        Klik tombol Simpan untuk meminta izin notifikasi
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
