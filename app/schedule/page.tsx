@@ -128,6 +128,7 @@ export default function SchedulePage() {
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [daysToShow, setDaysToShow] = useState(7); // State baru untuk jumlah hari yang ditampilkan
 
   // ==================== UTILITY FUNCTIONS ====================
 
@@ -197,6 +198,21 @@ export default function SchedulePage() {
       
       return { ...prev, prayerTypes };
     });
+  };
+
+  // Fungsi untuk menambah hari yang ditampilkan
+  const loadMoreDays = () => {
+    if (schedule) {
+      const maxDays = schedule.monthly_schedule.length;
+      const newDaysToShow = Math.min(daysToShow + 7, maxDays);
+      setDaysToShow(newDaysToShow);
+      
+      if (newDaysToShow >= maxDays) {
+        toast.success('Semua jadwal bulanan telah ditampilkan');
+      } else {
+        toast.info(`Menampilkan ${newDaysToShow} hari`);
+      }
+    }
   };
 
   // ==================== API FUNCTIONS ====================
@@ -1148,18 +1164,18 @@ export default function SchedulePage() {
             >
               <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
                 <div className="text-center lg:text-left">
-                  <div className="text-sm opacity-90 mb-1">📅 Hari ini</div>
+                  <div className="text-sm opacity-90 mb-1">Hari ini</div>
                   <div className="text-xl font-bold">{schedule.city.date_today}</div>
                   <div className="text-sm opacity-80 mt-1">{schedule.city.hijri_date}</div>
                 </div>
                 
                 <div className="text-center">
-                  <div className="text-sm opacity-90 mb-1">📍 Lokasi</div>
+                  <div className="text-sm opacity-90 mb-1">Lokasi</div>
                   <div className="text-xl font-bold">{schedule.city.name}</div>
                 </div>
                 
                 <div className="text-center lg:text-right">
-                  <div className="text-sm opacity-90 mb-1">🕒 Waktu Sekarang</div>
+                  <div className="text-sm opacity-90 mb-1">Waktu Sekarang</div>
                   <div className="text-xl font-bold">
                     {currentTime.toLocaleTimeString('id-ID', {
                       hour: '2-digit',
@@ -1253,7 +1269,7 @@ export default function SchedulePage() {
                           
                           {timeRemaining && isNextPrayer && (
                             <div className="text-xs bg-white/20 rounded-lg px-3 py-1.5 mt-1 backdrop-blur-sm">
-                              ⏳ {timeRemaining} lagi
+                              ⏰ {timeRemaining} lagi
                             </div>
                           )}
                         </div>
@@ -1279,7 +1295,7 @@ export default function SchedulePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {schedule.monthly_schedule.slice(0, 7).map((day) => (
+                        {schedule.monthly_schedule.slice(0, daysToShow).map((day) => (
                           <tr
                             key={day.date}
                             className={`hover:bg-blue-50/50 transition ${
@@ -1321,19 +1337,22 @@ export default function SchedulePage() {
                       </tbody>
                     </table>
                   </div>
-                  <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 text-center">
-                    <button 
-                      onClick={() => toast.info('Fitur tampilkan lebih banyak akan segera tersedia')}
-                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Tampilkan lebih banyak hari →
-                    </button>
-                  </div>
+                  {daysToShow < schedule.monthly_schedule.length && (
+                    <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 text-center">
+                      <button 
+                        onClick={loadMoreDays}
+                        className="text-sm text-blue-600 hover:text-blue-800 font-medium inline-flex items-center gap-1"
+                      >
+                        <span>Tampilkan lebih banyak hari</span>
+                        <FaChevronDown className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* NEXT PRAYER HIGHLIGHT - IMPROVED */}
+            {/* NEXT PRAYER HIGHLIGHT - REVISED LAYOUT */}
             {schedule.today_schedule.next_prayer && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -1345,84 +1364,81 @@ export default function SchedulePage() {
                 <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
                 
                 <div className="relative z-10">
-                  <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
-                    {/* Left Section */}
-                    <div className="flex-1 text-center lg:text-left">
-                      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 rounded-full text-sm mb-4">
-                        <FaBell className="w-3 h-3" />
-                        <span>Sholat Selanjutnya</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-4">
-                        <div className="p-4 bg-white/20 rounded-2xl">
-                          <div className="p-3 bg-white/30 rounded-full">
-                            {getPrayerIcon(schedule.today_schedule.next_prayer.name)}
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <h3 className="text-2xl sm:text-3xl font-bold mb-2">
-                            {schedule.today_schedule.next_prayer.name}
-                          </h3>
-                          <div className="text-xl opacity-90 flex items-center gap-2">
-                            <FaClock className="w-5 h-5" />
-                            {formatTime(schedule.today_schedule.next_prayer.time_24h)}
-                            <span className="text-lg opacity-75 ml-2">
-                              ({schedule.today_schedule.next_prayer.time_24h})
-                            </span>
-                          </div>
-                        </div>
+                  <div className="flex flex-col items-center text-center">
+                    {/* Header dengan icon di atas */}
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 rounded-full text-sm mb-4">
+                      <FaBell className="w-3 h-3" />
+                      <span>Sholat Selanjutnya</span>
+                    </div>
+                    
+                    {/* Icon besar di tengah */}
+                    <div className="p-4 bg-white/20 rounded-2xl mb-4">
+                      <div className="p-4 bg-white/30 rounded-full">
+                        {getPrayerIcon(schedule.today_schedule.next_prayer.name)}
                       </div>
                     </div>
                     
-                    {/* Right Section */}
-                    <div className="flex-1 text-center">
-                      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 rounded-full text-sm mb-4">
+                    {/* Nama sholat */}
+                    <h3 className="text-2xl sm:text-3xl font-bold mb-2">
+                      {schedule.today_schedule.next_prayer.name}
+                    </h3>
+                    
+                    {/* Waktu sholat */}
+                    <div className="text-xl opacity-90 flex items-center justify-center gap-2 mb-6">
+                      <FaClock className="w-5 h-5" />
+                      {formatTime(schedule.today_schedule.next_prayer.time_24h)}
+                      <span className="text-lg opacity-75">
+                        ({schedule.today_schedule.next_prayer.time_24h})
+                      </span>
+                    </div>
+                    
+                    {/* Sisa waktu dalam box */}
+                    <div className="mb-6 w-full max-w-md">
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 rounded-full text-sm mb-3">
                         <FaClock className="w-3 h-3" />
                         <span>Sisa Waktu</span>
                       </div>
-                      
-                      <div className="text-4xl font-bold mb-6 bg-white/10 rounded-2xl px-8 py-6 backdrop-blur-sm">
+                      <div className="text-3xl sm:text-4xl font-bold bg-white/10 rounded-2xl px-8 py-4 backdrop-blur-sm">
                         {getTimeRemaining(schedule.today_schedule.next_prayer.time_24h) || 'WAKTU TELAH TIBA'}
                       </div>
+                    </div>
+                    
+                    {/* Tombol aksi */}
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center w-full max-w-md">
+                      <button
+                        onClick={() => {
+                          if (notificationSettings.enabled) {
+                            toast.success(`⏰ Pengingat untuk ${schedule.today_schedule.next_prayer.name} telah diatur`);
+                          } else {
+                            toast.info('🔔 Aktifkan notifikasi untuk mendapatkan pengingat sholat');
+                          }
+                        }}
+                        className="px-6 py-3 bg-white text-emerald-700 rounded-xl font-bold hover:bg-slate-100 transition flex items-center justify-center gap-2 shadow-lg"
+                      >
+                        <FaBell className="w-4 h-4" />
+                        Ingatkan Saya
+                      </button>
                       
-                      <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                        <button
-                          onClick={() => {
-                            if (notificationSettings.enabled) {
-                              toast.success(`⏰ Pengingat untuk ${schedule.today_schedule.next_prayer.name} telah diatur`);
-                            } else {
-                              toast.info('🔔 Aktifkan notifikasi untuk mendapatkan pengingat sholat');
-                            }
-                          }}
-                          className="px-6 py-3 bg-white text-emerald-700 rounded-xl font-bold hover:bg-slate-100 transition flex items-center justify-center gap-2 shadow-lg"
-                        >
-                          <FaBell className="w-4 h-4" />
-                          Ingatkan Saya
-                        </button>
-                        
-                        <button
-                          onClick={() => {
-                            // Share prayer time
-                            const shareText = `Waktu sholat ${schedule.today_schedule.next_prayer.name} di ${schedule.city.name} adalah ${schedule.today_schedule.next_prayer.time_24h}. Ayo sholat tepat waktu! 🕌`;
-                            if (navigator.share) {
-                              navigator.share({
-                                title: `Waktu Sholat ${schedule.today_schedule.next_prayer.name}`,
-                                text: shareText,
-                              });
-                            } else {
-                              navigator.clipboard.writeText(shareText);
-                              toast.success('Jadwal sholat disalin ke clipboard');
-                            }
-                          }}
-                          className="px-6 py-3 bg-white/20 text-white rounded-xl font-bold hover:bg-white/30 transition flex items-center justify-center gap-2 border border-white/30"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                          </svg>
-                          Bagikan
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => {
+                          const shareText = `Waktu sholat ${schedule.today_schedule.next_prayer.name} di ${schedule.city.name} adalah ${schedule.today_schedule.next_prayer.time_24h}. Ayo sholat tepat waktu! 🕌`;
+                          if (navigator.share) {
+                            navigator.share({
+                              title: `Waktu Sholat ${schedule.today_schedule.next_prayer.name}`,
+                              text: shareText,
+                            });
+                          } else {
+                            navigator.clipboard.writeText(shareText);
+                            toast.success('Jadwal sholat disalin ke clipboard');
+                          }
+                        }}
+                        className="px-6 py-3 bg-white/20 text-white rounded-xl font-bold hover:bg-white/30 transition flex items-center justify-center gap-2 border border-white/30"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
+                        Bagikan
+                      </button>
                     </div>
                   </div>
                 </div>
