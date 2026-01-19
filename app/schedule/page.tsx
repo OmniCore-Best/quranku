@@ -17,7 +17,6 @@ import {
   FaMobileAlt,
   FaMoon,
   FaSun,
-  FaCloudSun,
   FaCloudMoon,
   FaStar,
   FaSave,
@@ -25,6 +24,7 @@ import {
   FaCloudDownloadAlt,
   FaExclamationTriangle
 } from 'react-icons/fa';
+import { CiCloudSun } from "react-icons/ci";
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -134,13 +134,14 @@ export default function SchedulePage() {
   const getPrayerIcon = (prayerName: string) => {
     switch (prayerName.toLowerCase()) {
       case 'imsak':
+      case 'imsyak':
         return <FaMoon className="w-4 h-4" />;
       case 'subuh':
         return <FaSun className="w-4 h-4" />;
       case 'terbit':
         return <FaSun className="w-4 h-4" />;
       case 'dzuhur':
-        return <FaCloudSun className="w-4 h-4" />;
+        return <CiCloudSun className="w-4 h-4" />;
       case 'ashar':
         return <FaCloud className="w-4 h-4" />;
       case 'maghrib':
@@ -353,7 +354,6 @@ export default function SchedulePage() {
         
         // Cari kota yang sesuai
         await fetchCities(location.province_slug, location.city_slug);
-        setLoading(prev => ({ ...prev, location: false }));
         return;
       }
 
@@ -507,19 +507,34 @@ export default function SchedulePage() {
   };
 
   const fetchProvincesFromAPI = async (page: number = 1) => {
-    const response = await fetch(
-      `https://api.devnova.icu/api/islamic/prayer-time?type=provinces&page=${page}`
-    );
-    
-    if (response.ok) {
-      const data = await response.json();
-      setProvinces(prev => page === 1 ? data.data.provinces : [...prev, ...data.data.provinces]);
-      setHasMoreProvinces(!!data.data.pagination?.has_next);
-      setCurrentPage(page);
+    try {
+      const response = await fetch(
+        `https://api.devnova.icu/api/islamic/prayer-time?type=provinces&page=${page}`
+      );
       
-      // Simpan ke cache
-      localStorage.setItem('cachedProvinces', JSON.stringify(data.data.provinces));
-      localStorage.setItem('cachedProvincesTime', Date.now().toString());
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // PERBAIKAN: Struktur data berdasarkan API response
+      if (data.success && data.data && data.data.provinces) {
+        setProvinces(prev => page === 1 ? data.data.provinces : [...prev, ...data.data.provinces]);
+        setHasMoreProvinces(!!data.data.pagination?.has_next);
+        setCurrentPage(page);
+        
+        // Simpan ke cache
+        localStorage.setItem('cachedProvinces', JSON.stringify(data.data.provinces));
+        localStorage.setItem('cachedProvincesTime', Date.now().toString());
+      } else {
+        throw new Error('Invalid API response structure');
+      }
+    } catch (error) {
+      console.error('Error in fetchProvincesFromAPI:', error);
+      throw error;
+    } finally {
+      setLoading(prev => ({ ...prev, provinces: false }));
     }
   };
 
@@ -579,28 +594,43 @@ export default function SchedulePage() {
   };
 
   const fetchCitiesFromAPI = async (provinceSlug: string, targetCitySlug?: string) => {
-    const response = await fetch(
-      `https://api.devnova.icu/api/islamic/prayer-time?type=cities&province=${provinceSlug}`
-    );
-    
-    if (response.ok) {
-      const data = await response.json();
-      setCities(data.data.cities);
+    try {
+      const response = await fetch(
+        `https://api.devnova.icu/api/islamic/prayer-time?type=cities&province=${provinceSlug}`
+      );
       
-      // Simpan ke cache
-      const cacheKey = `cachedCities_${provinceSlug}`;
-      localStorage.setItem(cacheKey, JSON.stringify(data.data.cities));
-      localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
-      
-      // Pilih kota jika ada target
-      if (targetCitySlug) {
-        const city = data.data.cities.find((c: City) => c.slug === targetCitySlug);
-        if (city) {
-          setSelectedCity(city);
-        }
-      } else if (data.data.cities.length > 0) {
-        setSelectedCity(data.data.cities[0]);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
+      const data = await response.json();
+      
+      // PERBAIKAN: Struktur data berdasarkan API response
+      if (data.success && data.data && data.data.cities) {
+        setCities(data.data.cities);
+        
+        // Simpan ke cache
+        const cacheKey = `cachedCities_${provinceSlug}`;
+        localStorage.setItem(cacheKey, JSON.stringify(data.data.cities));
+        localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
+        
+        // Pilih kota jika ada target
+        if (targetCitySlug) {
+          const city = data.data.cities.find((c: City) => c.slug === targetCitySlug);
+          if (city) {
+            setSelectedCity(city);
+          }
+        } else if (data.data.cities.length > 0) {
+          setSelectedCity(data.data.cities[0]);
+        }
+      } else {
+        throw new Error('Invalid API response structure');
+      }
+    } catch (error) {
+      console.error('Error in fetchCitiesFromAPI:', error);
+      throw error;
+    } finally {
+      setLoading(prev => ({ ...prev, cities: false }));
     }
   };
 
@@ -614,7 +644,6 @@ export default function SchedulePage() {
       const cacheKey = `prayerSchedule_${selectedProvince.slug}_${selectedCity.slug}`;
       const cachedSchedule = localStorage.getItem(cacheKey);
       const cacheTime = localStorage.getItem(`${cacheKey}_time`);
-      const today = new Date().toISOString().split('T')[0];
       
       if (cachedSchedule && cacheTime) {
         const cacheDate = new Date(parseInt(cacheTime));
@@ -624,8 +653,8 @@ export default function SchedulePage() {
         if (now.getTime() - cacheDate.getTime() < 24 * 60 * 60 * 1000) {
           const scheduleData = JSON.parse(cachedSchedule);
           
-          // Cek apakah data untuk hari ini
-          if (scheduleData.city?.date_today === today) {
+          // PERBAIKAN: Cek apakah data valid
+          if (scheduleData && scheduleData.city) {
             setSchedule(scheduleData);
             setLoading(prev => ({ ...prev, schedule: false }));
             
@@ -656,33 +685,48 @@ export default function SchedulePage() {
   const fetchScheduleFromAPI = async () => {
     if (!selectedProvince || !selectedCity) return;
     
-    const response = await fetch(
-      `https://api.devnova.icu/api/islamic/prayer-time?type=schedule&province=${selectedProvince.slug}&city=${selectedCity.slug}`
-    );
-    
-    if (response.ok) {
-      const data = await response.json();
-      setSchedule(data.data);
+    try {
+      const response = await fetch(
+        `https://api.devnova.icu/api/islamic/prayer-time?type=schedule&province=${selectedProvince.slug}&city=${selectedCity.slug}`
+      );
       
-      // Simpan ke cache
-      const cacheKey = `prayerSchedule_${selectedProvince.slug}_${selectedCity.slug}`;
-      localStorage.setItem(cacheKey, JSON.stringify(data.data));
-      localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
-      
-      // Simpan lokasi terpilih
-      const location: UserLocation = {
-        province: selectedProvince.name,
-        province_slug: selectedProvince.slug,
-        city: selectedCity.name,
-        city_slug: selectedCity.slug
-      };
-      setUserLocation(location);
-      localStorage.setItem('prayerLocation', JSON.stringify(location));
-      
-      // Simpan ke Supabase untuk notifikasi
-      if (notificationSettings.enabled && isSubscribed) {
-        await schedulePrayerNotifications();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
+      const data = await response.json();
+      
+      // PERBAIKAN: Struktur data berdasarkan API response
+      if (data.success && data.data) {
+        setSchedule(data.data);
+        
+        // Simpan ke cache
+        const cacheKey = `prayerSchedule_${selectedProvince.slug}_${selectedCity.slug}`;
+        localStorage.setItem(cacheKey, JSON.stringify(data.data));
+        localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
+        
+        // Simpan lokasi terpilih
+        const location: UserLocation = {
+          province: selectedProvince.name,
+          province_slug: selectedProvince.slug,
+          city: selectedCity.name,
+          city_slug: selectedCity.slug
+        };
+        setUserLocation(location);
+        localStorage.setItem('prayerLocation', JSON.stringify(location));
+        
+        // Simpan ke Supabase untuk notifikasi
+        if (notificationSettings.enabled && isSubscribed) {
+          await schedulePrayerNotifications();
+        }
+      } else {
+        throw new Error('Invalid API response structure');
+      }
+    } catch (error) {
+      console.error('Error in fetchScheduleFromAPI:', error);
+      throw error;
+    } finally {
+      setLoading(prev => ({ ...prev, schedule: false }));
     }
   };
 
@@ -772,8 +816,14 @@ export default function SchedulePage() {
   useEffect(() => {
     checkNotificationPermission();
     loadNotificationSettings();
-    loadUserLocation();
     fetchProvinces();
+    
+    // Load user location setelah provinces dimuat
+    const timer = setTimeout(() => {
+      loadUserLocation();
+    }, 1000);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   // Fetch schedule when location changes
@@ -899,7 +949,12 @@ export default function SchedulePage() {
                         
                         {/* Province List */}
                         <div className="max-h-64 overflow-y-auto">
-                          {filteredProvinces.length === 0 ? (
+                          {loading.provinces ? (
+                            <div className="p-4 text-center text-slate-500 text-sm">
+                              <FaSync className="w-4 h-4 animate-spin mx-auto mb-2" />
+                              Memuat provinsi...
+                            </div>
+                          ) : filteredProvinces.length === 0 ? (
                             <div className="p-4 text-center text-slate-500 text-sm">
                               Tidak ditemukan
                             </div>
@@ -928,7 +983,7 @@ export default function SchedulePage() {
                           )}
                           
                           {/* Load More Button */}
-                          {hasMoreProvinces && filteredProvinces.length > 0 && (
+                          {hasMoreProvinces && filteredProvinces.length > 0 && !loading.provinces && (
                             <button
                               onClick={() => fetchProvinces(currentPage + 1)}
                               disabled={loading.provinces}
@@ -1022,7 +1077,12 @@ export default function SchedulePage() {
                         
                         {/* City List */}
                         <div className="max-h-64 overflow-y-auto">
-                          {filteredCities.length === 0 ? (
+                          {loading.cities ? (
+                            <div className="p-4 text-center text-slate-500 text-sm">
+                              <FaSync className="w-4 h-4 animate-spin mx-auto mb-2" />
+                              Memuat kota...
+                            </div>
+                          ) : filteredCities.length === 0 ? (
                             <div className="p-4 text-center text-slate-500 text-sm">
                               {searchQuery ? 'Kota tidak ditemukan' : 'Memuat kota...'}
                             </div>
@@ -1586,10 +1646,13 @@ export default function SchedulePage() {
               <FaClock className="w-8 h-8 text-blue-600" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 mb-2">
-              Pilih Provinsi dan Kota
+              {selectedProvince && selectedCity ? 'Memuat Jadwal...' : 'Pilih Provinsi dan Kota'}
             </h3>
             <p className="text-slate-600 mb-6 max-w-md mx-auto">
-              Pilih provinsi dan kota/kabupaten untuk melihat jadwal sholat di lokasi Anda
+              {selectedProvince && selectedCity 
+                ? `Memuat jadwal sholat untuk ${selectedCity.name}, ${selectedProvince.name}`
+                : 'Pilih provinsi dan kota/kabupaten untuk melihat jadwal sholat di lokasi Anda'
+              }
             </p>
             
             {!isOnline && (
@@ -1603,55 +1666,6 @@ export default function SchedulePage() {
           </div>
         )}
       </div>
-
-      {/* Add some custom styles */}
-      <style jsx global>{`
-        /* Custom range slider */
-        input[type="range"]::-webkit-slider-thumb {
-          appearance: none;
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: #3b82f6;
-          cursor: pointer;
-          border: 3px solid white;
-          box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
-        }
-        
-        input[type="range"]::-moz-range-thumb {
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: #3b82f6;
-          cursor: pointer;
-          border: 3px solid white;
-          box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
-        }
-        
-        /* Smooth transitions */
-        * {
-          transition: background-color 0.2s ease, border-color 0.2s ease;
-        }
-        
-        /* Hide scrollbar for dropdowns */
-        .overflow-y-auto::-webkit-scrollbar {
-          width: 6px;
-        }
-        
-        .overflow-y-auto::-webkit-scrollbar-track {
-          background: #f1f5f9;
-          border-radius: 3px;
-        }
-        
-        .overflow-y-auto::-webkit-slider-thumb {
-          background: #cbd5e1;
-          border-radius: 3px;
-        }
-        
-        .overflow-y-auto::-webkit-slider-thumb:hover {
-          background: #94a3b8;
-        }
-      `}</style>
     </div>
   );
 }
