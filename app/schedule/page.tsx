@@ -1453,29 +1453,32 @@ export default function SchedulePage() {
             )}
           </>
         ) : (
-          <div className="text-center py-12 bg-white/50 backdrop-blur-sm rounded-2xl border border-slate-200">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center border border-blue-200">
-              <FaClock className="w-8 h-8 text-blue-600" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">
-              {selectedProvince && selectedCity ? 'Memuat Jadwal...' : 'Pilih Provinsi dan Kota'}
-            </h3>
-            <p className="text-slate-600 mb-6 max-w-md mx-auto">
-              {selectedProvince && selectedCity 
-                ? `Memuat jadwal sholat untuk ${selectedCity.name}, ${selectedProvince.name}`
-                : 'Pilih provinsi dan kota/kabupaten untuk melihat jadwal sholat di lokasi Anda'
-              }
-            </p>
-            
-            {!isOnline && (
-              <div className="inline-flex items-center gap-2 px-4 py-3 bg-slate-100 rounded-xl">
-                <FaDatabase className="w-4 h-4 text-slate-600" />
-                <span className="text-sm text-slate-700">
-                  Mode Offline • Data dari cache lokal
-                </span>
+          /* EMPTY STATE - hanya tampil jika tidak ada dropdown yang terbuka */
+          !showProvinceDropdown && !showCityDropdown && (
+            <div className="text-center py-12 bg-white/50 backdrop-blur-sm rounded-2xl border border-slate-200">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center border border-blue-200">
+                <FaClock className="w-8 h-8 text-blue-600" />
               </div>
-            )}
-          </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
+                {selectedProvince && selectedCity ? 'Memuat Jadwal...' : 'Pilih Provinsi dan Kota'}
+              </h3>
+              <p className="text-slate-600 mb-6 max-w-md mx-auto">
+                {selectedProvince && selectedCity 
+                  ? `Memuat jadwal sholat untuk ${selectedCity.name}, ${selectedProvince.name}`
+                  : 'Pilih provinsi dan kota/kabupaten untuk melihat jadwal sholat di lokasi Anda'
+                }
+              </p>
+              
+              {!isOnline && (
+                <div className="inline-flex items-center gap-2 px-4 py-3 bg-slate-100 rounded-xl">
+                  <FaDatabase className="w-4 h-4 text-slate-600" />
+                  <span className="text-sm text-slate-700">
+                    Mode Offline • Data dari cache lokal
+                  </span>
+                </div>
+              )}
+            </div>
+          )
         )}
       </div>
     </div>
