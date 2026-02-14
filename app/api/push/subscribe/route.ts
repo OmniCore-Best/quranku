@@ -6,7 +6,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { endpoint, keys, prayerTypes, advanceMinutes } = body;
 
-    // Validasi data yang diperlukan
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return NextResponse.json(
         { error: 'Missing required fields' },
@@ -22,7 +21,7 @@ export async function POST(request: NextRequest) {
           p256dh: keys.p256dh,
           auth: keys.auth,
           enabled: true,
-          prayer_types: prayerTypes || ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'],
+          prayer_types: prayerTypes || ['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'],
           advance_minutes: advanceMinutes || 10,
           updated_at: new Date().toISOString(),
         },

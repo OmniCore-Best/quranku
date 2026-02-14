@@ -3,17 +3,28 @@ import { supabase } from '@/lib/supabase';
 import webPush from 'web-push';
 
 webPush.setVapidDetails(
-  'mailto:admin@quranku.devnova.icu',
+  'mailto:this.key@devnova.icu',
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
   process.env.VAPID_PRIVATE_KEY!
 );
 
 export async function GET(request: NextRequest) {
   try {
-    const { data: subscriptions, error } = await supabase
+    const { searchParams } = new URL(request.url);
+    const prayerName = searchParams.get('prayer');
+    const advanceMinutes = parseInt(searchParams.get('advance') || '10');
+
+    let query = supabase
       .from('push_subscriptions')
       .select('*')
       .eq('enabled', true);
+
+    if (prayerName) {
+      // Filter subscriptions yang memiliki prayerName di prayer_types
+      query = query.contains('prayer_types', [prayerName]);
+    }
+
+    const { data: subscriptions, error } = await query;
 
     if (error) throw error;
 
@@ -26,10 +37,15 @@ export async function GET(request: NextRequest) {
 
       const payload = JSON.stringify({
         title: 'Pengingat Sholat',
-        body: 'Waktu sholat akan segera tiba',
+        body: `Waktu ${prayerName || 'sholat'} akan segera tiba`,
         icon: '/icons/icon-192x192.png',
         badge: '/icons/icon-72x72.png',
-        data: { url: '/schedule', type: 'prayer_reminder' }
+        data: { 
+          url: '/schedule', 
+          type: 'prayer_reminder',
+          prayer: prayerName,
+          advance: advanceMinutes
+        }
       });
 
       try {

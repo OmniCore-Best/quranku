@@ -218,11 +218,27 @@ export default function SchedulePage() {
     }
   };
 
+  // ==================== PERBAIKAN UTAMA ====================
   const loadNotificationSettings = async () => {
     try {
       const saved = localStorage.getItem('prayerNotificationSettings');
       if (saved) {
-        setNotificationSettings(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        // Gabungkan dengan default, pastikan prayerTypes array dan mengandung 'imsak'
+        const prayerTypes = parsed.prayerTypes && Array.isArray(parsed.prayerTypes) 
+          ? parsed.prayerTypes 
+          : ['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'];
+        
+        // Tambahkan imsak jika belum ada (agar tidak hilang)
+        if (!prayerTypes.includes('imsak')) {
+          prayerTypes.push('imsak');
+        }
+
+        setNotificationSettings({
+          enabled: parsed.enabled ?? false,
+          advanceMinutes: parsed.advanceMinutes ?? 10,
+          prayerTypes: prayerTypes,
+        });
       }
       
       if ('serviceWorker' in navigator) {
@@ -235,55 +251,6 @@ export default function SchedulePage() {
     }
   };
 
-  const saveNotificationSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      localStorage.setItem('prayerNotificationSettings', JSON.stringify(notificationSettings));
-      
-      if (notificationSettings.enabled && notificationPermission !== 'granted') {
-        await requestNotificationPermission();
-      }
-      
-      if (notificationSettings.enabled && notificationPermission === 'granted') {
-        await subscribeToPushNotifications();
-      }
-      
-      if (!notificationSettings.enabled && isSubscribed) {
-        await unsubscribeFromPushNotifications();
-      }
-      
-      toast.success('Pengaturan notifikasi disimpan');
-    } catch (error) {
-      console.error('Error saving notification settings:', error);
-      toast.error('Gagal menyimpan pengaturan');
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const requestNotificationPermission = async () => {
-    if (!('Notification' in window)) {
-      toast.error('Browser tidak mendukung notifikasi');
-      return;
-    }
-
-    try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-      
-      if (permission === 'granted') {
-        await subscribeToPushNotifications();
-        toast.success('Notifikasi diaktifkan');
-      } else {
-        toast.warning('Izin notifikasi ditolak');
-      }
-    } catch (error) {
-      console.error('Error requesting notification permission:', error);
-      toast.error('Gagal mengaktifkan notifikasi');
-    }
-  };
-
-  // ==================== PERBAIKAN UTAMA ====================
   const subscribeToPushNotifications = async () => {
     try {
       const registration = await navigator.serviceWorker.ready;
@@ -349,6 +316,65 @@ export default function SchedulePage() {
       }
     } catch (error) {
       console.error('Error unsubscribing from push:', error);
+    }
+  };
+
+  const requestNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      toast.error('Browser tidak mendukung notifikasi');
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      
+      if (permission === 'granted') {
+        await subscribeToPushNotifications();
+        toast.success('Notifikasi diaktifkan');
+      } else {
+        toast.warning('Izin notifikasi ditolak');
+      }
+    } catch (error) {
+      console.error('Error requesting notification permission:', error);
+      toast.error('Gagal mengaktifkan notifikasi');
+    }
+  };
+
+  const saveNotificationSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      localStorage.setItem('prayerNotificationSettings', JSON.stringify(notificationSettings));
+      
+      if (notificationSettings.enabled && notificationPermission !== 'granted') {
+        await requestNotificationPermission();
+      }
+      
+      if (notificationSettings.enabled && notificationPermission === 'granted') {
+        await subscribeToPushNotifications();
+      }
+      
+      if (!notificationSettings.enabled && isSubscribed) {
+        await unsubscribeFromPushNotifications();
+      }
+
+      // === TAMBAHKAN INI: kirim preferensi ke service worker ===
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'UPDATE_PRAYER_PREFERENCES',
+          data: {
+            prayerTypes: notificationSettings.prayerTypes,
+            advanceMinutes: notificationSettings.advanceMinutes
+          }
+        });
+      }
+      
+      toast.success('Pengaturan notifikasi disimpan');
+    } catch (error) {
+      console.error('Error saving notification settings:', error);
+      toast.error('Gagal menyimpan pengaturan');
+    } finally {
+      setIsSavingSettings(false);
     }
   };
 
