@@ -13,12 +13,9 @@ import {
   FaLocationArrow,
   FaSearch,
   FaCloud,
-  FaWifi,
-  FaMobileAlt,
   FaMoon,
   FaSun,
   FaCloudMoon,
-  FaStar,
   FaSave,
   FaDatabase,
   FaCloudDownloadAlt,
@@ -26,9 +23,7 @@ import {
 } from 'react-icons/fa';
 import { CiCloudSun } from "react-icons/ci";
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { db } from '@/lib/db';
 
 // ==================== TYPE DEFINITIONS ====================
 
@@ -80,15 +75,6 @@ interface PrayerSchedule {
   monthly_schedule: MonthlyScheduleDay[];
 }
 
-interface UserLocation {
-  province: string;
-  province_slug: string;
-  city: string;
-  city_slug: string;
-  latitude?: number;
-  longitude?: number;
-}
-
 interface NotificationSettings {
   enabled: boolean;
   advanceMinutes: number;
@@ -107,10 +93,8 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState({
     provinces: false,
     cities: false,
-    schedule: false,
-    location: false
+    schedule: false
   });
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -128,7 +112,7 @@ export default function SchedulePage() {
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
-  const [daysToShow, setDaysToShow] = useState(7); // State baru untuk jumlah hari yang ditampilkan
+  const [daysToShow, setDaysToShow] = useState(7);
 
   // ==================== UTILITY FUNCTIONS ====================
 
@@ -200,7 +184,6 @@ export default function SchedulePage() {
     });
   };
 
-  // Fungsi untuk menambah hari yang ditampilkan
   const loadMoreDays = () => {
     if (schedule) {
       const maxDays = schedule.monthly_schedule.length;
@@ -230,7 +213,6 @@ export default function SchedulePage() {
         setNotificationSettings(JSON.parse(saved));
       }
       
-      // Cek subscription status
       if ('serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();
@@ -246,17 +228,14 @@ export default function SchedulePage() {
     try {
       localStorage.setItem('prayerNotificationSettings', JSON.stringify(notificationSettings));
       
-      // Jika notification diaktifkan dan belum ada permission, minta permission
       if (notificationSettings.enabled && notificationPermission !== 'granted') {
         await requestNotificationPermission();
       }
       
-      // Jika notification diaktifkan dan permission sudah granted, subscribe
       if (notificationSettings.enabled && notificationPermission === 'granted') {
         await subscribeToPushNotifications();
       }
       
-      // Jika notification dimatikan, unsubscribe
       if (!notificationSettings.enabled && isSubscribed) {
         await unsubscribeFromPushNotifications();
       }
@@ -295,19 +274,15 @@ export default function SchedulePage() {
   const subscribeToPushNotifications = async () => {
     try {
       const registration = await navigator.serviceWorker.ready;
-      
-      // Cek apakah sudah subscribe
       let subscription = await registration.pushManager.getSubscription();
       
       if (!subscription) {
-        // Subscribe baru
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
         });
       }
       
-      // Kirim subscription ke server
       const response = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: {
@@ -336,7 +311,6 @@ export default function SchedulePage() {
       if (subscription) {
         await subscription.unsubscribe();
         
-        // Hapus dari server
         await fetch('/api/push/subscribe', {
           method: 'DELETE',
           headers: {
@@ -353,140 +327,12 @@ export default function SchedulePage() {
     }
   };
 
-  const loadUserLocation = async () => {
-    setLoading(prev => ({ ...prev, location: true }));
-    
-    try {
-      // Coba ambil dari localStorage terlebih dahulu
-      const savedLocation = localStorage.getItem('prayerLocation');
-      if (savedLocation) {
-        const location = JSON.parse(savedLocation);
-        setUserLocation(location);
-        setSelectedProvince({ 
-          name: location.province, 
-          slug: location.province_slug, 
-          city_count: 0 
-        });
-        
-        // Cari kota yang sesuai
-        await fetchCities(location.province_slug, location.city_slug);
-        return;
-      }
-
-      // Coba deteksi lokasi GPS
-      if ('geolocation' in navigator) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            try {
-              // Reverse geocoding menggunakan API gratis
-              const response = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`
-              );
-              const data = await response.json();
-              
-              if (data.address) {
-                // Cari provinsi berdasarkan nama
-                const provinceName = data.address.state || data.address.province;
-                if (provinceName) {
-                  // Normalize province name
-                  const normalizedName = normalizeProvinceName(provinceName);
-                  await autoSelectLocation(normalizedName);
-                }
-              }
-            } catch (error) {
-              console.error('Geocoding error:', error);
-              await autoSelectLocation('dki-jakarta');
-            }
-          },
-          async (error) => {
-            console.error('Geolocation error:', error);
-            // Fallback ke lokasi default
-            await autoSelectLocation('dki-jakarta');
-          },
-          { 
-            enableHighAccuracy: true,
-            timeout: 5000,
-            maximumAge: 60000 
-          }
-        );
-      } else {
-        await autoSelectLocation('dki-jakarta');
-      }
-    } catch (error) {
-      console.error('Location loading error:', error);
-      await autoSelectLocation('dki-jakarta');
-    } finally {
-      setLoading(prev => ({ ...prev, location: false }));
-    }
-  };
-
-  const normalizeProvinceName = (name: string): string => {
-    const provinceMap: Record<string, string> = {
-      'jakarta': 'dki-jakarta',
-      'bali': 'bali',
-      'jawa barat': 'west-java',
-      'jawa tengah': 'central-java',
-      'jawa timur': 'east-java',
-      'yogyakarta': 'yogyakarta',
-      'sumatera utara': 'north-sumatra',
-      'sumatera barat': 'west-sumatra',
-      'riau': 'riau',
-      'kepulauan riau': 'riau-islands',
-      'jambi': 'jambi',
-      'sumatera selatan': 'south-sumatra',
-      'bengkulu': 'bengkulu',
-      'lampung': 'lampung',
-      'bangka belitung': 'bangka-belitung-islands',
-      'kalimantan barat': 'west-kalimantan',
-      'kalimantan tengah': 'central-kalimantan',
-      'kalimantan selatan': 'south-kalimantan',
-      'kalimantan timur': 'east-kalimantan',
-      'kalimantan utara': 'north-kalimantan',
-      'sulawesi utara': 'north-sulawesi',
-      'sulawesi tengah': 'central-sulawesi',
-      'sulawesi selatan': 'south-sulawesi',
-      'sulawesi tenggara': 'southeast-sulawesi',
-      'gorontalo': 'gorontalo',
-      'sulawesi barat': 'west-sulawesi',
-      'maluku': 'maluku',
-      'maluku utara': 'north-maluku',
-      'papua': 'papua',
-      'papua barat': 'west-papua',
-      'aceh': 'aceh',
-      'banten': 'banten'
-    };
-
-    const lowerName = name.toLowerCase();
-    return provinceMap[lowerName] || lowerName.replace(/\s+/g, '-');
-  };
-
-  const autoSelectLocation = async (provinceSlug: string) => {
-    try {
-      // Fetch provinces jika belum ada
-      if (provinces.length === 0) {
-        await fetchProvinces();
-      }
-
-      // Cari provinsi
-      const province = provinces.find(p => p.slug === provinceSlug);
-      if (province) {
-        setSelectedProvince(province);
-        
-        // Fetch cities untuk provinsi ini
-        await fetchCities(provinceSlug);
-      }
-    } catch (error) {
-      console.error('Auto select error:', error);
-    }
-  };
-
   const fetchProvinces = async (page: number = 1) => {
     if (loading.provinces) return;
     
     setLoading(prev => ({ ...prev, provinces: true }));
     
     try {
-      // Coba ambil dari cache offline dulu
       const cachedProvinces = localStorage.getItem('cachedProvinces');
       const cacheTime = localStorage.getItem('cachedProvincesTime');
       
@@ -499,7 +345,6 @@ export default function SchedulePage() {
           setProvinces(JSON.parse(cachedProvinces));
           setLoading(prev => ({ ...prev, provinces: false }));
           
-          // Jika online, tetap fetch data terbaru di background
           if (isOnline) {
             fetchProvincesFromAPI(page);
           }
@@ -507,7 +352,6 @@ export default function SchedulePage() {
         }
       }
 
-      // Jika offline dan tidak ada cache
       if (!isOnline) {
         toast.warning('Sedang offline, menggunakan data cache terakhir');
         setLoading(prev => ({ ...prev, provinces: false }));
@@ -534,13 +378,11 @@ export default function SchedulePage() {
       
       const data = await response.json();
       
-      // PERBAIKAN: Struktur data berdasarkan API response
       if (data.success && data.data && data.data.provinces) {
         setProvinces(prev => page === 1 ? data.data.provinces : [...prev, ...data.data.provinces]);
         setHasMoreProvinces(!!data.data.pagination?.has_next);
         setCurrentPage(page);
         
-        // Simpan ke cache
         localStorage.setItem('cachedProvinces', JSON.stringify(data.data.provinces));
         localStorage.setItem('cachedProvincesTime', Date.now().toString());
       } else {
@@ -560,7 +402,6 @@ export default function SchedulePage() {
     setLoading(prev => ({ ...prev, cities: true }));
     
     try {
-      // Cek cache offline
       const cacheKey = `cachedCities_${provinceSlug}`;
       const cachedCities = localStorage.getItem(cacheKey);
       const cacheTime = localStorage.getItem(`${cacheKey}_time`);
@@ -574,7 +415,6 @@ export default function SchedulePage() {
           const citiesData = JSON.parse(cachedCities);
           setCities(citiesData);
           
-          // Pilih kota jika ada target
           if (targetCitySlug) {
             const city = citiesData.find((c: City) => c.slug === targetCitySlug);
             if (city) {
@@ -586,7 +426,6 @@ export default function SchedulePage() {
           
           setLoading(prev => ({ ...prev, cities: false }));
           
-          // Jika online, fetch data terbaru di background
           if (isOnline) {
             fetchCitiesFromAPI(provinceSlug, targetCitySlug);
           }
@@ -594,7 +433,6 @@ export default function SchedulePage() {
         }
       }
 
-      // Jika offline dan tidak ada cache
       if (!isOnline) {
         toast.warning('Sedang offline, menggunakan data cache terakhir');
         setLoading(prev => ({ ...prev, cities: false }));
@@ -621,16 +459,13 @@ export default function SchedulePage() {
       
       const data = await response.json();
       
-      // PERBAIKAN: Struktur data berdasarkan API response
       if (data.success && data.data && data.data.cities) {
         setCities(data.data.cities);
         
-        // Simpan ke cache
         const cacheKey = `cachedCities_${provinceSlug}`;
         localStorage.setItem(cacheKey, JSON.stringify(data.data.cities));
         localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
         
-        // Pilih kota jika ada target
         if (targetCitySlug) {
           const city = data.data.cities.find((c: City) => c.slug === targetCitySlug);
           if (city) {
@@ -656,7 +491,6 @@ export default function SchedulePage() {
     setLoading(prev => ({ ...prev, schedule: true }));
     
     try {
-      // Cek cache offline
       const cacheKey = `prayerSchedule_${selectedProvince.slug}_${selectedCity.slug}`;
       const cachedSchedule = localStorage.getItem(cacheKey);
       const cacheTime = localStorage.getItem(`${cacheKey}_time`);
@@ -665,16 +499,13 @@ export default function SchedulePage() {
         const cacheDate = new Date(parseInt(cacheTime));
         const now = new Date();
         
-        // Cache valid untuk 24 jam
         if (now.getTime() - cacheDate.getTime() < 24 * 60 * 60 * 1000) {
           const scheduleData = JSON.parse(cachedSchedule);
           
-          // PERBAIKAN: Cek apakah data valid
           if (scheduleData && scheduleData.city) {
             setSchedule(scheduleData);
             setLoading(prev => ({ ...prev, schedule: false }));
             
-            // Jika online, fetch data terbaru di background
             if (isOnline) {
               fetchScheduleFromAPI();
             }
@@ -683,7 +514,6 @@ export default function SchedulePage() {
         }
       }
 
-      // Jika offline dan tidak ada cache valid
       if (!isOnline) {
         toast.warning('Sedang offline, menggunakan data cache terakhir');
         setLoading(prev => ({ ...prev, schedule: false }));
@@ -712,26 +542,22 @@ export default function SchedulePage() {
       
       const data = await response.json();
       
-      // PERBAIKAN: Struktur data berdasarkan API response
       if (data.success && data.data) {
         setSchedule(data.data);
         
-        // Simpan ke cache
         const cacheKey = `prayerSchedule_${selectedProvince.slug}_${selectedCity.slug}`;
         localStorage.setItem(cacheKey, JSON.stringify(data.data));
         localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
         
-        // Simpan lokasi terpilih
-        const location: UserLocation = {
+        // Simpan pilihan lokasi ke localStorage
+        const location = {
           province: selectedProvince.name,
           province_slug: selectedProvince.slug,
           city: selectedCity.name,
           city_slug: selectedCity.slug
         };
-        setUserLocation(location);
         localStorage.setItem('prayerLocation', JSON.stringify(location));
         
-        // Simpan ke Supabase untuk notifikasi
         if (notificationSettings.enabled && isSubscribed) {
           await schedulePrayerNotifications();
         }
@@ -750,7 +576,6 @@ export default function SchedulePage() {
     if (!schedule || !selectedProvince || !selectedCity) return;
     
     try {
-      // Simpan jadwal untuk notifikasi di Service Worker
       const prayerNotifications = schedule.today_schedule.prayers
         .filter(prayer => notificationSettings.prayerTypes.includes(prayer.name.toLowerCase()))
         .map(prayer => ({
@@ -759,7 +584,6 @@ export default function SchedulePage() {
           advanceMinutes: notificationSettings.advanceMinutes
         }));
       
-      // Kirim ke Service Worker
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
           type: 'SCHEDULE_PRAYER_NOTIFICATIONS',
@@ -772,7 +596,6 @@ export default function SchedulePage() {
           }
         });
         
-        // Simpan ke localStorage untuk Service Worker
         localStorage.setItem('prayerNotifications', JSON.stringify(prayerNotifications));
       }
     } catch (error) {
@@ -796,7 +619,6 @@ export default function SchedulePage() {
 
   // ==================== EFFECTS ====================
 
-  // Check online status
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
@@ -819,7 +641,6 @@ export default function SchedulePage() {
     };
   }, []);
 
-  // Update current time every minute
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -828,21 +649,29 @@ export default function SchedulePage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Load initial data
+  // Load saved location from localStorage after provinces are loaded
+  useEffect(() => {
+    const savedLocation = localStorage.getItem('prayerLocation');
+    if (savedLocation && provinces.length > 0) {
+      try {
+        const location = JSON.parse(savedLocation);
+        const province = provinces.find(p => p.slug === location.province_slug);
+        if (province) {
+          setSelectedProvince(province);
+          fetchCities(province.slug, location.city_slug);
+        }
+      } catch (error) {
+        console.error('Error parsing saved location:', error);
+      }
+    }
+  }, [provinces]);
+
   useEffect(() => {
     checkNotificationPermission();
     loadNotificationSettings();
     fetchProvinces();
-    
-    // Load user location setelah provinces dimuat
-    const timer = setTimeout(() => {
-      loadUserLocation();
-    }, 1000);
-    
-    return () => clearTimeout(timer);
   }, []);
 
-  // Fetch schedule when location changes
   useEffect(() => {
     if (selectedProvince && selectedCity) {
       fetchSchedule();
@@ -867,7 +696,6 @@ export default function SchedulePage() {
               </p>
             </div>
             
-            {/* Status & Actions */}
             <div className="flex items-center gap-2">
               {isOnline ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full">
@@ -896,7 +724,7 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* LOCATION SELECTOR - IMPROVED DESIGN */}
+          {/* LOCATION SELECTOR - MANUAL ONLY */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/80 p-4 mb-6 shadow-sm shadow-slate-100">
             <div className="flex items-center gap-2 mb-3">
               <FaMapMarkerAlt className="w-4 h-4 text-blue-600" />
@@ -916,7 +744,7 @@ export default function SchedulePage() {
                       setShowCityDropdown(false);
                     }}
                     className="w-full px-4 py-3 text-left bg-white border border-slate-300 rounded-xl hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 flex items-center justify-between group"
-                    disabled={loading.provinces || loading.location}
+                    disabled={loading.provinces}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition">
@@ -938,16 +766,14 @@ export default function SchedulePage() {
                     )}
                   </button>
 
-                  {/* Dropdown Menu */}
                   <AnimatePresence>
                     {showProvinceDropdown && (
                       <motion.div
                         initial={{ opacity: 0, y: -10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-300/50 z-50 overflow-hidden"
+                        className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-300/50 overflow-hidden z-[9999]"
                       >
-                        {/* Search Input */}
                         <div className="p-3 border-b border-slate-100">
                           <div className="relative">
                             <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -963,7 +789,6 @@ export default function SchedulePage() {
                           </div>
                         </div>
                         
-                        {/* Province List */}
                         <div className="max-h-64 overflow-y-auto">
                           {loading.provinces ? (
                             <div className="p-4 text-center text-slate-500 text-sm">
@@ -998,7 +823,6 @@ export default function SchedulePage() {
                             ))
                           )}
                           
-                          {/* Load More Button */}
                           {hasMoreProvinces && filteredProvinces.length > 0 && !loading.provinces && (
                             <button
                               onClick={() => fetchProvinces(currentPage + 1)}
@@ -1066,16 +890,14 @@ export default function SchedulePage() {
                     )}
                   </button>
 
-                  {/* Dropdown Menu */}
                   <AnimatePresence>
                     {showCityDropdown && selectedProvince && (
                       <motion.div
                         initial={{ opacity: 0, y: -10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-300/50 z-50 overflow-hidden"
+                        className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-300/50 overflow-hidden z-[9999]"
                       >
-                        {/* Search Input */}
                         <div className="p-3 border-b border-slate-100">
                           <div className="relative">
                             <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -1091,7 +913,6 @@ export default function SchedulePage() {
                           </div>
                         </div>
                         
-                        {/* City List */}
                         <div className="max-h-64 overflow-y-auto">
                           {loading.cities ? (
                             <div className="p-4 text-center text-slate-500 text-sm">
@@ -1132,30 +953,9 @@ export default function SchedulePage() {
                 </div>
               </div>
             </div>
-
-            {/* GPS Location Button */}
-            <div className="mt-4 flex items-center justify-center">
-              <button
-                onClick={loadUserLocation}
-                disabled={loading.location}
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all duration-200 shadow-sm hover:shadow"
-              >
-                {loading.location ? (
-                  <>
-                    <FaSync className="w-3.5 h-3.5 animate-spin" />
-                    <span>Mendeteksi lokasi...</span>
-                  </>
-                ) : (
-                  <>
-                    <FaMobileAlt className="w-3.5 h-3.5" />
-                    <span>Gunakan Lokasi Saya</span>
-                  </>
-                )}
-              </button>
-            </div>
           </div>
 
-          {/* TODAY'S INFO - IMPROVED */}
+          {/* TODAY'S INFO */}
           {schedule && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -1199,7 +999,7 @@ export default function SchedulePage() {
           </div>
         ) : schedule ? (
           <>
-            {/* PRAYER TIMES GRID - IMPROVED */}
+            {/* PRAYER TIMES GRID */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -1268,8 +1068,9 @@ export default function SchedulePage() {
                           </div>
                           
                           {timeRemaining && isNextPrayer && (
-                            <div className="text-xs bg-white/20 rounded-lg px-3 py-1.5 mt-1 backdrop-blur-sm">
-                              ⏰ {timeRemaining} lagi
+                            <div className="text-xs bg-white/20 rounded-lg px-3 py-1.5 mt-1 backdrop-blur-sm flex items-center gap-1">
+                              <FaClock className="w-3 h-3" />
+                              {timeRemaining} lagi
                             </div>
                           )}
                         </div>
@@ -1278,7 +1079,6 @@ export default function SchedulePage() {
                   })}
                 </div>
               ) : (
-                /* MONTHLY VIEW - IMPROVED */
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                   <div className="overflow-x-auto">
                     <table className="w-full">
@@ -1352,38 +1152,33 @@ export default function SchedulePage() {
               )}
             </div>
 
-            {/* NEXT PRAYER HIGHLIGHT - REVISED LAYOUT */}
+            {/* NEXT PRAYER HIGHLIGHT */}
             {schedule.today_schedule.next_prayer && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="relative bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-700 text-white rounded-2xl p-6 mb-8 overflow-hidden shadow-xl"
               >
-                {/* Background Pattern */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
                 <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
                 
                 <div className="relative z-10">
                   <div className="flex flex-col items-center text-center">
-                    {/* Header dengan icon di atas */}
                     <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 rounded-full text-sm mb-4">
                       <FaBell className="w-3 h-3" />
                       <span>Sholat Selanjutnya</span>
                     </div>
                     
-                    {/* Icon besar di tengah */}
                     <div className="p-4 bg-white/20 rounded-2xl mb-4">
                       <div className="p-4 bg-white/30 rounded-full">
                         {getPrayerIcon(schedule.today_schedule.next_prayer.name)}
                       </div>
                     </div>
                     
-                    {/* Nama sholat */}
                     <h3 className="text-2xl sm:text-3xl font-bold mb-2">
                       {schedule.today_schedule.next_prayer.name}
                     </h3>
                     
-                    {/* Waktu sholat */}
                     <div className="text-xl opacity-90 flex items-center justify-center gap-2 mb-6">
                       <FaClock className="w-5 h-5" />
                       {formatTime(schedule.today_schedule.next_prayer.time_24h)}
@@ -1392,7 +1187,6 @@ export default function SchedulePage() {
                       </span>
                     </div>
                     
-                    {/* Sisa waktu dalam box */}
                     <div className="mb-6 w-full max-w-md">
                       <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 rounded-full text-sm mb-3">
                         <FaClock className="w-3 h-3" />
@@ -1403,14 +1197,23 @@ export default function SchedulePage() {
                       </div>
                     </div>
                     
-                    {/* Tombol aksi */}
                     <div className="flex flex-col sm:flex-row gap-3 justify-center w-full max-w-md">
                       <button
                         onClick={() => {
                           if (notificationSettings.enabled) {
-                            toast.success(`⏰ Pengingat untuk ${schedule.today_schedule.next_prayer.name} telah diatur`);
+                            toast.success(
+                              <div className="flex items-center gap-2">
+                                <FaClock className="w-4 h-4" />
+                                <span>Pengingat untuk {schedule.today_schedule.next_prayer.name} telah diatur</span>
+                              </div>
+                            );
                           } else {
-                            toast.info('🔔 Aktifkan notifikasi untuk mendapatkan pengingat sholat');
+                            toast.info(
+                              <div className="flex items-center gap-2">
+                                <FaBell className="w-4 h-4" />
+                                <span>Aktifkan notifikasi untuk mendapatkan pengingat sholat</span>
+                              </div>
+                            );
                           }
                         }}
                         className="px-6 py-3 bg-white text-emerald-700 rounded-xl font-bold hover:bg-slate-100 transition flex items-center justify-center gap-2 shadow-lg"
@@ -1421,7 +1224,7 @@ export default function SchedulePage() {
                       
                       <button
                         onClick={() => {
-                          const shareText = `Waktu sholat ${schedule.today_schedule.next_prayer.name} di ${schedule.city.name} adalah ${schedule.today_schedule.next_prayer.time_24h}. Ayo sholat tepat waktu! 🕌`;
+                          const shareText = `Waktu sholat ${schedule.today_schedule.next_prayer.name} di ${schedule.city.name} adalah ${schedule.today_schedule.next_prayer.time_24h}. Ayo sholat tepat waktu!`;
                           if (navigator.share) {
                             navigator.share({
                               title: `Waktu Sholat ${schedule.today_schedule.next_prayer.name}`,
@@ -1445,7 +1248,7 @@ export default function SchedulePage() {
               </motion.div>
             )}
 
-            {/* NOTIFICATION SETTINGS - IMPROVED */}
+            {/* NOTIFICATION SETTINGS */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1481,7 +1284,6 @@ export default function SchedulePage() {
               </div>
               
               <div className="space-y-6">
-                {/* Toggle Switch */}
                 <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
                   <div>
                     <div className="font-medium text-slate-900">Notifikasi Sholat</div>
@@ -1505,7 +1307,6 @@ export default function SchedulePage() {
                   </label>
                 </div>
                 
-                {/* Advanced Settings */}
                 {showAdvancedSettings && notificationSettings.enabled && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
@@ -1534,7 +1335,6 @@ export default function SchedulePage() {
                       </div>
                     </div>
                     
-                    {/* Advance Minutes Slider */}
                     <div className="mb-5">
                       <div className="flex items-center justify-between mb-3">
                         <div>
@@ -1566,7 +1366,6 @@ export default function SchedulePage() {
                       </div>
                     </div>
                     
-                    {/* Permission Status */}
                     {notificationPermission === 'granted' ? (
                       <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
                         <div className="flex items-center gap-3">
@@ -1609,7 +1408,6 @@ export default function SchedulePage() {
                   </motion.div>
                 )}
                 
-                {/* Save Button */}
                 <div className="flex flex-col sm:flex-row gap-3 justify-end">
                   <button
                     onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
@@ -1639,7 +1437,6 @@ export default function SchedulePage() {
               </div>
             </motion.div>
 
-            {/* OFFLINE INFO */}
             {!isOnline && (
               <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
                 <div className="flex items-start gap-3">
@@ -1656,30 +1453,32 @@ export default function SchedulePage() {
             )}
           </>
         ) : (
-          /* EMPTY STATE */
-          <div className="text-center py-12 bg-white/50 backdrop-blur-sm rounded-2xl border border-slate-200">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center border border-blue-200">
-              <FaClock className="w-8 h-8 text-blue-600" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">
-              {selectedProvince && selectedCity ? 'Memuat Jadwal...' : 'Pilih Provinsi dan Kota'}
-            </h3>
-            <p className="text-slate-600 mb-6 max-w-md mx-auto">
-              {selectedProvince && selectedCity 
-                ? `Memuat jadwal sholat untuk ${selectedCity.name}, ${selectedProvince.name}`
-                : 'Pilih provinsi dan kota/kabupaten untuk melihat jadwal sholat di lokasi Anda'
-              }
-            </p>
-            
-            {!isOnline && (
-              <div className="inline-flex items-center gap-2 px-4 py-3 bg-slate-100 rounded-xl">
-                <FaDatabase className="w-4 h-4 text-slate-600" />
-                <span className="text-sm text-slate-700">
-                  Mode Offline • Data dari cache lokal
-                </span>
+          /* EMPTY STATE - hanya tampil jika tidak ada dropdown yang terbuka */
+          !showProvinceDropdown && !showCityDropdown && (
+            <div className="text-center py-12 bg-white/50 backdrop-blur-sm rounded-2xl border border-slate-200">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center border border-blue-200">
+                <FaClock className="w-8 h-8 text-blue-600" />
               </div>
-            )}
-          </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
+                {selectedProvince && selectedCity ? 'Memuat Jadwal...' : 'Pilih Provinsi dan Kota'}
+              </h3>
+              <p className="text-slate-600 mb-6 max-w-md mx-auto">
+                {selectedProvince && selectedCity 
+                  ? `Memuat jadwal sholat untuk ${selectedCity.name}, ${selectedProvince.name}`
+                  : 'Pilih provinsi dan kota/kabupaten untuk melihat jadwal sholat di lokasi Anda'
+                }
+              </p>
+              
+              {!isOnline && (
+                <div className="inline-flex items-center gap-2 px-4 py-3 bg-slate-100 rounded-xl">
+                  <FaDatabase className="w-4 h-4 text-slate-600" />
+                  <span className="text-sm text-slate-700">
+                    Mode Offline • Data dari cache lokal
+                  </span>
+                </div>
+              )}
+            </div>
+          )
         )}
       </div>
     </div>
