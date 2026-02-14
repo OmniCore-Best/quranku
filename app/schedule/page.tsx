@@ -116,6 +116,18 @@ export default function SchedulePage() {
 
   // ==================== UTILITY FUNCTIONS ====================
 
+  // Fungsi konversi VAPID public key dari base64 ke Uint8Array
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
   const getPrayerIcon = (prayerName: string) => {
     switch (prayerName.toLowerCase()) {
       case 'imsak':
@@ -271,35 +283,48 @@ export default function SchedulePage() {
     }
   };
 
+  // ==================== PERBAIKAN UTAMA ====================
   const subscribeToPushNotifications = async () => {
     try {
       const registration = await navigator.serviceWorker.ready;
       let subscription = await registration.pushManager.getSubscription();
-      
+
       if (!subscription) {
+        const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        if (!vapidPublicKey) {
+          toast.error('VAPID public key tidak ditemukan');
+          return;
+        }
+        const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+          applicationServerKey: applicationServerKey
         });
       }
-      
+
+      // Kirim subscription beserta preferensi ke server
       const response = await fetch('/api/push/subscribe', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(subscription),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: subscription.endpoint,
+          keys: subscription.toJSON().keys,
+          prayerTypes: notificationSettings.prayerTypes,
+          advanceMinutes: notificationSettings.advanceMinutes
+        }),
       });
-      
+
       if (response.ok) {
         setIsSubscribed(true);
-        console.log('Push subscription berhasil');
+        toast.success('Berhasil berlangganan notifikasi');
       } else {
-        console.error('Gagal mengirim subscription ke server');
+        const error = await response.json();
+        toast.error('Gagal berlangganan: ' + (error.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error subscribing to push:', error);
-      toast.error('Gagal mendaftarkan notifikasi push');
+      toast.error('Gagal mendaftarkan notifikasi push: ' + (error as Error).message);
     }
   };
 
@@ -1436,6 +1461,32 @@ export default function SchedulePage() {
                 </div>
               </div>
             </motion.div>
+
+            {/* TOMBOL TEST NOTIFIKASI (OPSIONAL) */}
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={async () => {
+                  const res = await fetch('/api/push/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      title: '🔔 Notifikasi Test',
+                      body: 'Ini adalah notifikasi uji coba dari aplikasi quranku',
+                      url: '/schedule'
+                    })
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    toast.success(`Notifikasi dikirim ke ${data.results.length} perangkat`);
+                  } else {
+                    toast.error('Gagal mengirim notifikasi');
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                Kirim Notifikasi Test
+              </button>
+            </div>
 
             {!isOnline && (
               <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
