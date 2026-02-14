@@ -772,7 +772,7 @@ export default function SchedulePage() {
                         initial={{ opacity: 0, y: -10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-300/50 z-50 overflow-hidden"
+                        className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-300/50 overflow-hidden z-[9999]"
                       >
                         <div className="p-3 border-b border-slate-100">
                           <div className="relative">
@@ -896,7 +896,7 @@ export default function SchedulePage() {
                         initial={{ opacity: 0, y: -10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-300/50 z-50 overflow-hidden"
+                        className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-300/50 overflow-hidden z-[9999]"
                       >
                         <div className="p-3 border-b border-slate-100">
                           <div className="relative">
