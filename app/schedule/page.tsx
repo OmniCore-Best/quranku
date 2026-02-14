@@ -108,7 +108,7 @@ export default function SchedulePage() {
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
     enabled: false,
     advanceMinutes: 10,
-    prayerTypes: ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya']
+    prayerTypes: ['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya']
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
