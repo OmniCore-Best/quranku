@@ -25,6 +25,55 @@ const STATIC_ASSETS = [
   'https://fonts.gstatic.com/s/amiri/v30/J7acnpd8CGxBHp2VkaY_zp4.woff2'
 ];
 
+// ================= PREFERENSI NOTIFIKASI =================
+let prayerPreferences = {
+  prayerTypes: ['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'],
+  advanceMinutes: 10
+};
+
+const DB_NAME = 'PrayerPrefsDB';
+const STORE_NAME = 'preferences';
+const DB_VERSION = 1;
+
+function openPreferencesDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = (event) => resolve(event.target.result);
+    request.onerror = (event) => reject(event.target.error);
+  });
+}
+
+async function loadPreferences() {
+  try {
+    const db = await openPreferencesDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const saved = await store.get('preferences');
+    if (saved) {
+      prayerPreferences = saved;
+    }
+  } catch (error) {
+    console.error('[SW] Gagal load preferensi:', error);
+  }
+}
+
+async function savePreferences(prefs) {
+  try {
+    const db = await openPreferencesDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    await store.put(prefs, 'preferences');
+  } catch (error) {
+    console.error('[SW] Gagal simpan preferensi:', error);
+  }
+}
+
 // ================= INSTALL =================
 self.addEventListener('install', event => {
   console.log('[Service Worker] Installing...');
@@ -68,6 +117,7 @@ self.addEventListener('activate', event => {
       
       // Klaim klien segera
       await self.clients.claim();
+      await loadPreferences(); // Load preferensi dari IndexedDB
       
       console.log('[Service Worker] Activation completed');
       
@@ -81,6 +131,44 @@ self.addEventListener('activate', event => {
       });
     })()
   );
+});
+
+// ================= MESSAGE HANDLER =================
+self.addEventListener('message', event => {
+  console.log('[Service Worker] Message received:', event.data);
+  
+  if (event.data.type === 'UPDATE_PRAYER_PREFERENCES') {
+    prayerPreferences = event.data.data;
+    savePreferences(prayerPreferences);
+    // Opsional: batalkan jadwal lama dan buat ulang
+  }
+  
+  if (event.data.type === 'CACHE_AUDIO') {
+    // Pre-cache audio untuk surah tertentu
+    event.waitUntil(cacheAudioForSurah(event.data.surahId, event.data.audioUrls));
+  }
+  
+  if (event.data.type === 'GET_CACHE_INFO') {
+    // Kembalikan informasi cache ke klien
+    event.waitUntil(
+      (async () => {
+        const cacheNames = await caches.keys();
+        const cacheSizes = {};
+        
+        for (const name of cacheNames) {
+          const cache = await caches.open(name);
+          const keys = await cache.keys();
+          cacheSizes[name] = keys.length;
+        }
+        
+        // Kirim balik ke klien
+        event.source.postMessage({
+          type: 'CACHE_INFO',
+          data: cacheSizes
+        });
+      })()
+    );
+  }
 });
 
 // ================= FETCH =================
@@ -282,30 +370,37 @@ self.addEventListener('fetch', event => {
 self.addEventListener('push', event => {
   console.log('[Service Worker] Push received');
   
-  const data = event.data?.json() || {
-    title: 'quranku',
-    body: 'Ada pembaruan baru!',
-    icon: '/icons/icon-192x192.png'
+  let data = {};
+  try {
+    data = event.data?.json() || {
+      title: 'quranku',
+      body: 'Ada pembaruan baru!',
+      icon: '/icons/icon-192x192.png'
+    };
+  } catch (error) {
+    data = {
+      title: 'Waktu Sholat',
+      body: 'Saatnya menunaikan sholat',
+      icon: '/icons/icon-192x192.png',
+      data: { type: 'prayer_time', prayer: 'sholat' }
+    };
+  }
+
+  const options = {
+    body: data.body,
+    icon: data.icon || '/icons/icon-192x192.png',
+    badge: '/icons/icon-72x72.png',
+    vibrate: [200, 100, 200, 100, 200],
+    data: data.data || { url: '/' },
+    actions: [
+      { action: 'open', title: 'Buka' },
+      { action: 'dismiss', title: 'Tutup' }
+    ],
+    requireInteraction: true
   };
-  
+
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: data.icon || '/icons/icon-192x192.png',
-      badge: '/icons/icon-72x72.png',
-      vibrate: [200, 100, 200],
-      data: { url: data.url || '/' },
-      actions: [
-        {
-          action: 'open',
-          title: 'Buka'
-        },
-        {
-          action: 'dismiss',
-          title: 'Tutup'
-        }
-      ]
-    })
+    self.registration.showNotification(data.title || 'quranku', options)
   );
 });
 
@@ -326,7 +421,7 @@ self.addEventListener('notificationclick', event => {
       
       // Cari tab yang sudah terbuka
       for (const client of clients) {
-        if (client.url === event.notification.data.url && 'focus' in client) {
+        if (client.url.includes(event.notification.data.url) && 'focus' in client) {
           return client.focus();
         }
       }
@@ -339,217 +434,113 @@ self.addEventListener('notificationclick', event => {
   );
 });
 
-// ================= WEB PUSH NOTIFICATIONS =================
-self.addEventListener('push', event => {
-  console.log('[Service Worker] Push received for prayer time');
-  
-  let data = {};
-  try {
-    data = event.data?.json() || {};
-  } catch (error) {
-    data = {
-      title: 'Waktu Sholat',
-      body: 'Saatnya menunaikan sholat',
-      icon: '/icons/icon-192x192.png',
-      data: { 
-        type: 'prayer_time',
-        prayer: 'sholat',
-        time: new Date().toISOString()
-      }
-    };
-  }
-
-  // Customize based on prayer type
-  const prayerIcons = {
-    'imsak': '🌙',
-    'subuh': '🌅',
-    'dzuhur': '☀️',
-    'ashar': '⛅',
-    'maghrib': '🌇',
-    'isya': '🌃'
-  };
-
-  const prayer = data.data?.prayer || 'sholat';
-  const icon = prayerIcons[prayer.toLowerCase()] || '🕌';
-
-  const options = {
-    body: data.body || `${icon} Waktu ${prayer} telah tiba`,
-    icon: data.icon || '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
-    vibrate: [200, 100, 200, 100, 200],
-    data: {
-      url: data.data?.url || '/schedule',
-      type: 'prayer_time',
-      prayer: prayer,
-      time: data.data?.time || new Date().toISOString()
-    },
-    actions: [
-      {
-        action: 'open',
-        title: 'Buka Jadwal'
-      },
-      {
-        action: 'snooze',
-        title: 'Tunda 5 Menit'
-      }
-    ],
-    tag: `prayer-${prayer}-${new Date().toDateString()}`,
-    renotify: true,
-    requireInteraction: true
-  };
-
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'Waktu Sholat', options)
-  );
-});
-
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-
-  if (event.action === 'snooze') {
-    // Handle snooze action
-    console.log('Snooze clicked for prayer notification');
-    // You can implement snooze logic here
-    return;
-  }
-
-  if (event.action === 'open' || !event.action) {
-    event.waitUntil(
-      clients.matchAll({ type: 'window', includeUncontrolled: true })
-        .then(windowClients => {
-          // Check if there's already a window/tab open with the target URL
-          for (const client of windowClients) {
-            if (client.url.includes('/schedule') && 'focus' in client) {
-              return client.focus();
-            }
-          }
-          // If not, open a new window/tab
-          if (clients.openWindow) {
-            return clients.openWindow('/schedule');
-          }
-        })
-    );
-  }
-});
-
-// Background sync for prayer times
+// ================= BACKGROUND SYNC UNTUK JADWAL SHOLAT =================
 self.addEventListener('sync', event => {
+  console.log('[Service Worker] Background sync:', event.tag);
+  
   if (event.tag === 'sync-prayer-times') {
-    event.waitUntil(syncPrayerTimes());
+    event.waitUntil(syncAndSchedulePrayers());
+  }
+  
+  if (event.tag === 'sync-quran-data') {
+    event.waitUntil(syncQuranData());
   }
 });
 
-async function syncPrayerTimes() {
+async function syncAndSchedulePrayers() {
   try {
     console.log('[Service Worker] Syncing prayer times...');
     
-    // Get user's location from IndexedDB
-    const db = await openPrayerDB();
-    const location = await getStoredLocation(db);
+    // Ambil lokasi dari IndexedDB atau localStorage melalui klien
+    const clients = await self.clients.matchAll();
+    let location = null;
     
-    if (location) {
-      // Fetch latest prayer times
-      const response = await fetch(
-        `https://api.devnova.icu/api/islamic/prayer-time?type=schedule&province=${location.province_slug}&city=${location.city_slug}`
-      );
+    // Minta lokasi dari klien yang terbuka
+    for (const client of clients) {
+      client.postMessage({ type: 'REQUEST_LOCATION' });
+      // Tunggu respons? Sulit, jadi lebih baik ambil dari cache sendiri
+    }
+    
+    // Alternatif: coba baca dari cache API jika sebelumnya disimpan
+    const cache = await caches.open('prayer-location');
+    const cachedLocation = await cache.match('/api/location');
+    if (cachedLocation) {
+      location = await cachedLocation.json();
+    }
+    
+    if (!location) return;
+    
+    const response = await fetch(
+      `https://api.devnova.icu/api/islamic/prayer-time?type=schedule&province=${location.province_slug}&city=${location.city_slug}`
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
       
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Store in cache
-        const cache = await caches.open('prayer-times-v1');
-        const cacheKey = `/api/prayer/${location.province_slug}/${location.city_slug}`;
-        await cache.put(cacheKey, new Response(JSON.stringify(data)));
-        
-        console.log('[Service Worker] Prayer times synced successfully');
-        
-        // Calculate next prayer and schedule notification
-        scheduleNextPrayerNotification(data.data);
-      }
+      // Store in cache
+      const cache = await caches.open('prayer-times-v1');
+      const cacheKey = `/api/prayer/${location.province_slug}/${location.city_slug}`;
+      await cache.put(cacheKey, new Response(JSON.stringify(data)));
+      
+      console.log('[Service Worker] Prayer times synced successfully');
+      
+      // Jadwalkan notifikasi berdasarkan preferensi
+      scheduleNextPrayers(data.data.today_schedule.prayers);
     }
   } catch (error) {
     console.error('[Service Worker] Prayer times sync failed:', error);
   }
 }
 
-async function openPrayerDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('PrayerDB', 1);
-    
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains('locations')) {
-        db.createObjectStore('locations', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('settings')) {
-        db.createObjectStore('settings', { keyPath: 'key' });
-      }
-    };
-    
-    request.onsuccess = (event) => resolve(event.target.result);
-    request.onerror = (event) => reject(event.target.error);
-  });
-}
-
-async function getStoredLocation(db) {
-  return new Promise((resolve) => {
-    const transaction = db.transaction(['locations'], 'readonly');
-    const store = transaction.objectStore('locations');
-    const request = store.get('current');
-    
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => resolve(null);
-  });
-}
-
-function scheduleNextPrayerNotification(scheduleData) {
-  if (!scheduleData || !scheduleData.today_schedule) return;
-  
-  const prayers = scheduleData.today_schedule.prayers;
+function scheduleNextPrayers(prayers) {
   const now = new Date();
-  
-  for (const prayer of prayers) {
-    const [hours, minutes] = prayer.time_24h.split(':').map(Number);
-    const prayerTime = new Date();
-    prayerTime.setHours(hours, minutes, 0, 0);
-    
-    // Schedule notification 10 minutes before prayer time
-    const notificationTime = new Date(prayerTime.getTime() - 10 * 60000);
-    
-    if (notificationTime > now) {
-      const delay = notificationTime.getTime() - now.getTime();
-      
-      setTimeout(() => {
-        self.registration.showNotification(`Waktu ${prayer.name}`, {
-          body: `Waktu ${prayer.name} dalam 10 menit (${prayer.time_24h})`,
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-72x72.png',
-          vibrate: [200, 100, 200],
-          data: {
-            url: '/schedule',
-            type: 'prayer_reminder',
-            prayer: prayer.name,
-            time: prayer.time_24h
-          },
-          tag: `reminder-${prayer.name}-${prayer.time_24h}`,
-          renotify: true
-        });
-      }, delay);
-      
-      console.log(`Scheduled ${prayer.name} notification for ${notificationTime}`);
-      break; // Only schedule the next prayer
-    }
+  const todayStr = now.toDateString();
+
+  // Urutkan prayer berdasarkan waktu (ascending)
+  const sorted = prayers
+    .map(p => {
+      const [h, m] = p.time_24h.split(':').map(Number);
+      const time = new Date();
+      time.setHours(h, m, 0, 0);
+      return { ...p, timeObj: time };
+    })
+    .sort((a, b) => a.timeObj - b.timeObj);
+
+  // Cari sholat yang akan datang (termasuk yang sudah lewat? kita jadwalkan untuk hari ini saja)
+  for (const prayer of sorted) {
+    const prayerName = prayer.name.toLowerCase();
+    // Jika sholat ini tidak termasuk dalam preferensi, lewati
+    if (!prayerPreferences.prayerTypes.includes(prayerName)) continue;
+
+    const prayerTime = prayer.timeObj;
+    const notifTime = new Date(prayerTime.getTime() - prayerPreferences.advanceMinutes * 60000);
+
+    // Jika waktu notifikasi sudah lewat, lewati
+    if (notifTime <= now) continue;
+
+    const delay = notifTime.getTime() - now.getTime();
+    setTimeout(() => {
+      self.registration.showNotification(`Pengingat Sholat ${prayer.name}`, {
+        body: `Waktu ${prayer.name} akan tiba dalam ${prayerPreferences.advanceMinutes} menit (${prayer.time_24h})`,
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/icon-72x72.png',
+        vibrate: [200, 100, 200],
+        data: {
+          url: '/schedule',
+          type: 'prayer_reminder',
+          prayer: prayer.name,
+          time: prayer.time_24h
+        },
+        tag: `reminder-${prayer.name}-${todayStr}`,
+        renotify: true
+      });
+    }, delay);
+
+    // Hanya jadwalkan satu notifikasi terdekat untuk menghindari terlalu banyak timer
+    // Jika ingin semua sholat dijadwalkan, hapus break
+    break; 
   }
 }
-
-// ================= BACKGROUND SYNC =================
-self.addEventListener('sync', event => {
-  console.log('[Service Worker] Background sync:', event.tag);
-  
-  if (event.tag === 'sync-quran-data') {
-    event.waitUntil(syncQuranData());
-  }
-});
 
 async function syncQuranData() {
   try {
@@ -576,38 +567,6 @@ async function syncQuranData() {
     console.error('[Service Worker] Sync failed:', error);
   }
 }
-
-// ================= MESSAGE HANDLING =================
-self.addEventListener('message', event => {
-  console.log('[Service Worker] Message received:', event.data);
-  
-  if (event.data.type === 'CACHE_AUDIO') {
-    // Pre-cache audio untuk surah tertentu
-    event.waitUntil(cacheAudioForSurah(event.data.surahId, event.data.audioUrls));
-  }
-  
-  if (event.data.type === 'GET_CACHE_INFO') {
-    // Kembalikan informasi cache ke klien
-    event.waitUntil(
-      (async () => {
-        const cacheNames = await caches.keys();
-        const cacheSizes = {};
-        
-        for (const name of cacheNames) {
-          const cache = await caches.open(name);
-          const keys = await cache.keys();
-          cacheSizes[name] = keys.length;
-        }
-        
-        // Kirim balik ke klien
-        event.source.postMessage({
-          type: 'CACHE_INFO',
-          data: cacheSizes
-        });
-      })()
-    );
-  }
-});
 
 async function cacheAudioForSurah(surahId, audioUrls) {
   try {

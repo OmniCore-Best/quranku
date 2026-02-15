@@ -108,7 +108,7 @@ export default function SchedulePage() {
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
     enabled: false,
     advanceMinutes: 10,
-    prayerTypes: ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya']
+    prayerTypes: ['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya']
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -116,27 +116,58 @@ export default function SchedulePage() {
 
   // ==================== UTILITY FUNCTIONS ====================
 
-  const getPrayerIcon = (prayerName: string) => {
-    switch (prayerName.toLowerCase()) {
-      case 'imsak':
-      case 'imsyak':
-        return <FaMoon className="w-4 h-4" />;
-      case 'subuh':
-        return <FaSun className="w-4 h-4" />;
-      case 'terbit':
-        return <FaSun className="w-4 h-4" />;
-      case 'dzuhur':
-        return <CiCloudSun className="w-4 h-4" />;
-      case 'ashar':
-        return <FaCloud className="w-4 h-4" />;
-      case 'maghrib':
-        return <FaCloudMoon className="w-4 h-4" />;
-      case 'isya':
-        return <FaMoon className="w-4 h-4" />;
-      default:
-        return <FaClock className="w-4 h-4" />;
+  // Fungsi konversi VAPID public key dari base64 ke Uint8Array
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
     }
+    return outputArray;
+  }
+
+  const getPrayerIcon = (prayerName: string) => {
+    const lowerName = prayerName.toLowerCase();
+    if (lowerName.includes('imsak') || lowerName.includes('imsyak')) {
+      return <FaMoon className="w-4 h-4" />;
+    }
+    if (lowerName.includes('subuh')) return <FaSun className="w-4 h-4" />;
+    if (lowerName.includes('terbit')) return <FaSun className="w-4 h-4" />;
+    if (lowerName.includes('dzuhur') || lowerName.includes('dhuhur')) return <CiCloudSun className="w-4 h-4" />;
+    if (lowerName.includes('ashar') || lowerName.includes('asr')) return <FaCloud className="w-4 h-4" />;
+    if (lowerName.includes('maghrib')) return <FaCloudMoon className="w-4 h-4" />;
+    if (lowerName.includes('isya')) return <FaMoon className="w-4 h-4" />;
+    return <FaClock className="w-4 h-4" />;
   };
+
+  // ==================== FUNGSI BARU UNTUK MENGAMBIL WAKTU SHOLAT ====================
+  const getPrayerTimeFromSchedule = useCallback((prayerName: string): string => {
+    if (!schedule) return '--:--';
+    
+    // Mapping nama sholat yang kita gunakan di UI ke kemungkinan nama dari API
+    const prayerMapping: Record<string, string[]> = {
+      imsak: ['imsak', 'imsyak'],
+      subuh: ['subuh', 'shubuh'],
+      dzuhur: ['dzuhur', 'dhuhur', 'zuhur'],
+      ashar: ['ashar', 'asr'],
+      maghrib: ['maghrib'],
+      isya: ['isya', 'isya\'', 'isha']
+    };
+    
+    const possibleNames = prayerMapping[prayerName.toLowerCase()] || [prayerName];
+    
+    // Cari di today_schedule.prayers
+    for (const name of possibleNames) {
+      const prayer = schedule.today_schedule.prayers.find(
+        p => p.name.toLowerCase() === name.toLowerCase()
+      );
+      if (prayer) return prayer.time_24h;
+    }
+    
+    return '--:--';
+  }, [schedule]);
 
   const formatTime = (time24h: string) => {
     const [hours, minutes] = time24h.split(':').map(Number);
@@ -206,11 +237,27 @@ export default function SchedulePage() {
     }
   };
 
+  // ==================== PERBAIKAN UTAMA ====================
   const loadNotificationSettings = async () => {
     try {
       const saved = localStorage.getItem('prayerNotificationSettings');
       if (saved) {
-        setNotificationSettings(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        // Gabungkan dengan default, pastikan prayerTypes array dan mengandung 'imsak'
+        const prayerTypes = parsed.prayerTypes && Array.isArray(parsed.prayerTypes) 
+          ? parsed.prayerTypes 
+          : ['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'];
+        
+        // Tambahkan imsak jika belum ada (agar tidak hilang)
+        if (!prayerTypes.includes('imsak')) {
+          prayerTypes.push('imsak');
+        }
+
+        setNotificationSettings({
+          enabled: parsed.enabled ?? false,
+          advanceMinutes: parsed.advanceMinutes ?? 10,
+          prayerTypes: prayerTypes,
+        });
       }
       
       if ('serviceWorker' in navigator) {
@@ -223,29 +270,71 @@ export default function SchedulePage() {
     }
   };
 
-  const saveNotificationSettings = async () => {
-    setIsSavingSettings(true);
+  const subscribeToPushNotifications = async () => {
     try {
-      localStorage.setItem('prayerNotificationSettings', JSON.stringify(notificationSettings));
-      
-      if (notificationSettings.enabled && notificationPermission !== 'granted') {
-        await requestNotificationPermission();
+      const registration = await navigator.serviceWorker.ready;
+      let subscription = await registration.pushManager.getSubscription();
+
+      if (!subscription) {
+        const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        if (!vapidPublicKey) {
+          toast.error('VAPID public key tidak ditemukan');
+          return;
+        }
+        const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey
+        });
       }
-      
-      if (notificationSettings.enabled && notificationPermission === 'granted') {
-        await subscribeToPushNotifications();
+
+      // Kirim subscription beserta preferensi ke server
+      const response = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: subscription.endpoint,
+          keys: subscription.toJSON().keys,
+          prayerTypes: notificationSettings.prayerTypes,
+          advanceMinutes: notificationSettings.advanceMinutes
+        }),
+      });
+
+      if (response.ok) {
+        setIsSubscribed(true);
+        toast.success('Berhasil berlangganan notifikasi');
+      } else {
+        const error = await response.json();
+        toast.error('Gagal berlangganan: ' + (error.error || 'Unknown error'));
       }
-      
-      if (!notificationSettings.enabled && isSubscribed) {
-        await unsubscribeFromPushNotifications();
-      }
-      
-      toast.success('Pengaturan notifikasi disimpan');
     } catch (error) {
-      console.error('Error saving notification settings:', error);
-      toast.error('Gagal menyimpan pengaturan');
-    } finally {
-      setIsSavingSettings(false);
+      console.error('Error subscribing to push:', error);
+      toast.error('Gagal mendaftarkan notifikasi push: ' + (error as Error).message);
+    }
+  };
+
+  const unsubscribeFromPushNotifications = async () => {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      
+      if (subscription) {
+        await subscription.unsubscribe();
+        
+        await fetch('/api/push/subscribe', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        
+        setIsSubscribed(false);
+        console.log('Push subscription dihentikan');
+      }
+    } catch (error) {
+      console.error('Error unsubscribing from push:', error);
     }
   };
 
@@ -271,59 +360,40 @@ export default function SchedulePage() {
     }
   };
 
-  const subscribeToPushNotifications = async () => {
+  const saveNotificationSettings = async () => {
+    setIsSavingSettings(true);
     try {
-      const registration = await navigator.serviceWorker.ready;
-      let subscription = await registration.pushManager.getSubscription();
+      localStorage.setItem('prayerNotificationSettings', JSON.stringify(notificationSettings));
       
-      if (!subscription) {
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-        });
+      if (notificationSettings.enabled && notificationPermission !== 'granted') {
+        await requestNotificationPermission();
       }
       
-      const response = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(subscription),
-      });
-      
-      if (response.ok) {
-        setIsSubscribed(true);
-        console.log('Push subscription berhasil');
-      } else {
-        console.error('Gagal mengirim subscription ke server');
+      if (notificationSettings.enabled && notificationPermission === 'granted') {
+        await subscribeToPushNotifications();
       }
-    } catch (error) {
-      console.error('Error subscribing to push:', error);
-      toast.error('Gagal mendaftarkan notifikasi push');
-    }
-  };
+      
+      if (!notificationSettings.enabled && isSubscribed) {
+        await unsubscribeFromPushNotifications();
+      }
 
-  const unsubscribeFromPushNotifications = async () => {
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      
-      if (subscription) {
-        await subscription.unsubscribe();
-        
-        await fetch('/api/push/subscribe', {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ endpoint: subscription.endpoint }),
+      // === TAMBAHKAN INI: kirim preferensi ke service worker ===
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'UPDATE_PRAYER_PREFERENCES',
+          data: {
+            prayerTypes: notificationSettings.prayerTypes,
+            advanceMinutes: notificationSettings.advanceMinutes
+          }
         });
-        
-        setIsSubscribed(false);
-        console.log('Push subscription dihentikan');
       }
+      
+      toast.success('Pengaturan notifikasi disimpan');
     } catch (error) {
-      console.error('Error unsubscribing from push:', error);
+      console.error('Error saving notification settings:', error);
+      toast.error('Gagal menyimpan pengaturan');
+    } finally {
+      setIsSavingSettings(false);
     }
   };
 
@@ -577,7 +647,29 @@ export default function SchedulePage() {
     
     try {
       const prayerNotifications = schedule.today_schedule.prayers
-        .filter(prayer => notificationSettings.prayerTypes.includes(prayer.name.toLowerCase()))
+        .filter(prayer => {
+          // Mapping untuk mencocokkan nama sholat dari API dengan prayerTypes
+          const prayerName = prayer.name.toLowerCase();
+          if (prayerName.includes('imsak') || prayerName.includes('imsyak')) {
+            return notificationSettings.prayerTypes.includes('imsak');
+          }
+          if (prayerName.includes('subuh')) {
+            return notificationSettings.prayerTypes.includes('subuh');
+          }
+          if (prayerName.includes('dzuhur') || prayerName.includes('dhuhur')) {
+            return notificationSettings.prayerTypes.includes('dzuhur');
+          }
+          if (prayerName.includes('ashar') || prayerName.includes('asr')) {
+            return notificationSettings.prayerTypes.includes('ashar');
+          }
+          if (prayerName.includes('maghrib')) {
+            return notificationSettings.prayerTypes.includes('maghrib');
+          }
+          if (prayerName.includes('isya')) {
+            return notificationSettings.prayerTypes.includes('isya');
+          }
+          return false;
+        })
         .map(prayer => ({
           name: prayer.name,
           time: prayer.time_24h,
@@ -1328,7 +1420,7 @@ export default function SchedulePage() {
                           >
                             <div className="text-sm font-medium capitalize">{prayer}</div>
                             <div className="text-xs text-slate-500 mt-1">
-                              {schedule?.today_schedule.prayers.find(p => p.name.toLowerCase() === prayer)?.time_24h || '--:--'}
+                              {getPrayerTimeFromSchedule(prayer)}
                             </div>
                           </button>
                         ))}
@@ -1436,6 +1528,32 @@ export default function SchedulePage() {
                 </div>
               </div>
             </motion.div>
+
+            {/* TOMBOL TEST NOTIFIKASI (OPSIONAL) */}
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={async () => {
+                  const res = await fetch('/api/push/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      title: '🔔 Notifikasi Test',
+                      body: 'Ini adalah notifikasi uji coba dari aplikasi quranku',
+                      url: '/schedule'
+                    })
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    toast.success(`Notifikasi dikirim ke ${data.results.length} perangkat`);
+                  } else {
+                    toast.error('Gagal mengirim notifikasi');
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                Kirim Notifikasi Test
+              </button>
+            </div>
 
             {!isOnline && (
               <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
