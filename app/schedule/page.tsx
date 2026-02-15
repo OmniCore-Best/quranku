@@ -129,26 +129,45 @@ export default function SchedulePage() {
   }
 
   const getPrayerIcon = (prayerName: string) => {
-    switch (prayerName.toLowerCase()) {
-      case 'imsak':
-      case 'imsyak':
-        return <FaMoon className="w-4 h-4" />;
-      case 'subuh':
-        return <FaSun className="w-4 h-4" />;
-      case 'terbit':
-        return <FaSun className="w-4 h-4" />;
-      case 'dzuhur':
-        return <CiCloudSun className="w-4 h-4" />;
-      case 'ashar':
-        return <FaCloud className="w-4 h-4" />;
-      case 'maghrib':
-        return <FaCloudMoon className="w-4 h-4" />;
-      case 'isya':
-        return <FaMoon className="w-4 h-4" />;
-      default:
-        return <FaClock className="w-4 h-4" />;
+    const lowerName = prayerName.toLowerCase();
+    if (lowerName.includes('imsak') || lowerName.includes('imsyak')) {
+      return <FaMoon className="w-4 h-4" />;
     }
+    if (lowerName.includes('subuh')) return <FaSun className="w-4 h-4" />;
+    if (lowerName.includes('terbit')) return <FaSun className="w-4 h-4" />;
+    if (lowerName.includes('dzuhur') || lowerName.includes('dhuhur')) return <CiCloudSun className="w-4 h-4" />;
+    if (lowerName.includes('ashar') || lowerName.includes('asr')) return <FaCloud className="w-4 h-4" />;
+    if (lowerName.includes('maghrib')) return <FaCloudMoon className="w-4 h-4" />;
+    if (lowerName.includes('isya')) return <FaMoon className="w-4 h-4" />;
+    return <FaClock className="w-4 h-4" />;
   };
+
+  // ==================== FUNGSI BARU UNTUK MENGAMBIL WAKTU SHOLAT ====================
+  const getPrayerTimeFromSchedule = useCallback((prayerName: string): string => {
+    if (!schedule) return '--:--';
+    
+    // Mapping nama sholat yang kita gunakan di UI ke kemungkinan nama dari API
+    const prayerMapping: Record<string, string[]> = {
+      imsak: ['imsak', 'imsyak'],
+      subuh: ['subuh', 'shubuh'],
+      dzuhur: ['dzuhur', 'dhuhur', 'zuhur'],
+      ashar: ['ashar', 'asr'],
+      maghrib: ['maghrib'],
+      isya: ['isya', 'isya\'', 'isha']
+    };
+    
+    const possibleNames = prayerMapping[prayerName.toLowerCase()] || [prayerName];
+    
+    // Cari di today_schedule.prayers
+    for (const name of possibleNames) {
+      const prayer = schedule.today_schedule.prayers.find(
+        p => p.name.toLowerCase() === name.toLowerCase()
+      );
+      if (prayer) return prayer.time_24h;
+    }
+    
+    return '--:--';
+  }, [schedule]);
 
   const formatTime = (time24h: string) => {
     const [hours, minutes] = time24h.split(':').map(Number);
@@ -628,7 +647,29 @@ export default function SchedulePage() {
     
     try {
       const prayerNotifications = schedule.today_schedule.prayers
-        .filter(prayer => notificationSettings.prayerTypes.includes(prayer.name.toLowerCase()))
+        .filter(prayer => {
+          // Mapping untuk mencocokkan nama sholat dari API dengan prayerTypes
+          const prayerName = prayer.name.toLowerCase();
+          if (prayerName.includes('imsak') || prayerName.includes('imsyak')) {
+            return notificationSettings.prayerTypes.includes('imsak');
+          }
+          if (prayerName.includes('subuh')) {
+            return notificationSettings.prayerTypes.includes('subuh');
+          }
+          if (prayerName.includes('dzuhur') || prayerName.includes('dhuhur')) {
+            return notificationSettings.prayerTypes.includes('dzuhur');
+          }
+          if (prayerName.includes('ashar') || prayerName.includes('asr')) {
+            return notificationSettings.prayerTypes.includes('ashar');
+          }
+          if (prayerName.includes('maghrib')) {
+            return notificationSettings.prayerTypes.includes('maghrib');
+          }
+          if (prayerName.includes('isya')) {
+            return notificationSettings.prayerTypes.includes('isya');
+          }
+          return false;
+        })
         .map(prayer => ({
           name: prayer.name,
           time: prayer.time_24h,
@@ -1379,7 +1420,7 @@ export default function SchedulePage() {
                           >
                             <div className="text-sm font-medium capitalize">{prayer}</div>
                             <div className="text-xs text-slate-500 mt-1">
-                              {schedule?.today_schedule.prayers.find(p => p.name.toLowerCase() === prayer)?.time_24h || '--:--'}
+                              {getPrayerTimeFromSchedule(prayer)}
                             </div>
                           </button>
                         ))}
