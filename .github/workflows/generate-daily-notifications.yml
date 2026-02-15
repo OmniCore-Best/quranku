@@ -1,0 +1,16 @@
+name: Generate Daily Prayer Notifications
+
+on:
+  schedule:
+    - cron: '5 0 * * *' 
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call generate daily notifications endpoint
+        run: |
+          curl -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://quranku-test.vercel.app/api/cron/generate-daily-notifications
