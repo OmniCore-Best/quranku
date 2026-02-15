@@ -13,4 +13,4 @@ jobs:
         run: |
           curl -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            https://quranku-test.vercel.app/api/cron/send-notifications
+            https://quranku-test.vercel.app/api/cron/send-notifications 

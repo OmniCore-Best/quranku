@@ -1,10 +1,5 @@
 import { supabase } from './supabase';
-
-export interface PrayerNotificationData {
-  prayer_name: string;
-  prayer_time: string;
-  advance_minutes: number;
-}
+import { fromZonedTime } from 'date-fns-tz';
 
 export interface DailySchedule {
   prayers: Array<{
@@ -26,8 +21,9 @@ export async function generateDailyNotifications(
 ): Promise<void> {
   const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   const now = new Date();
+  const timeZone = 'Asia/Jakarta';
 
-  // Hapus notifikasi yang sudah ada untuk hari ini (jika pernah dibuat)
+  // Hapus notifikasi yang sudah ada untuk hari ini
   await supabase
     .from('prayer_notifications')
     .delete()
@@ -41,24 +37,31 @@ export async function generateDailyNotifications(
 
   for (const prayer of schedule.prayers) {
     const prayerName = prayer.name.toLowerCase();
-    // Cocokkan dengan prayerTypes (case insensitive)
     const matchingType = prayerTypes.find(pt => prayerName.includes(pt));
     if (!matchingType) continue;
 
+    // Buat string tanggal dalam format "YYYY-MM-DDTHH:mm:ss" (waktu lokal WIB)
     const [hours, minutes] = prayer.time_24h.split(':').map(Number);
-    const prayerDate = new Date();
-    prayerDate.setHours(hours, minutes, 0, 0);
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const timeStr = `${year}-${month}-${day}T${prayer.time_24h}:00`;
 
+    // Konversi dari waktu WIB ke UTC
+    const prayerDate = fromZonedTime(timeStr, timeZone);
+
+    // Hitung waktu notifikasi (advance minutes sebelumnya)
     const scheduledFor = new Date(prayerDate.getTime() - advanceMinutes * 60 * 1000);
 
-    // Jika waktu notifikasi sudah lewat hari ini, skip
+    // Jika waktu notifikasi sudah lewat, skip
     if (scheduledFor <= now) continue;
 
     notifications.push({
       endpoint,
       province_slug: provinceSlug,
       city_slug: citySlug,
-      prayer_name: prayer.name, // simpan nama asli dari API
+      prayer_name: prayer.name,
       prayer_time: prayer.time_24h,
       advance_minutes: advanceMinutes,
       scheduled_for: scheduledFor.toISOString(),
