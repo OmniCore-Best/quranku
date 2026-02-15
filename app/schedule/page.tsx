@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { generateDailyNotifications } from '@/lib/prayer-notifications';
 import { 
   FaMapMarkerAlt, 
   FaBell, 
@@ -274,7 +275,7 @@ export default function SchedulePage() {
     try {
       const registration = await navigator.serviceWorker.ready;
       let subscription = await registration.pushManager.getSubscription();
-
+  
       if (!subscription) {
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         if (!vapidPublicKey) {
@@ -282,14 +283,13 @@ export default function SchedulePage() {
           return;
         }
         const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
-
+  
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: applicationServerKey
         });
       }
-
-      // Kirim subscription beserta preferensi ke server
+  
       const response = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -297,10 +297,12 @@ export default function SchedulePage() {
           endpoint: subscription.endpoint,
           keys: subscription.toJSON().keys,
           prayerTypes: notificationSettings.prayerTypes,
-          advanceMinutes: notificationSettings.advanceMinutes
+          advanceMinutes: notificationSettings.advanceMinutes,
+          provinceSlug: selectedProvince?.slug,   // <-- tambahkan
+          citySlug: selectedCity?.slug             // <-- tambahkan
         }),
       });
-
+  
       if (response.ok) {
         setIsSubscribed(true);
         toast.success('Berhasil berlangganan notifikasi');
@@ -364,20 +366,41 @@ export default function SchedulePage() {
     setIsSavingSettings(true);
     try {
       localStorage.setItem('prayerNotificationSettings', JSON.stringify(notificationSettings));
-      
+  
       if (notificationSettings.enabled && notificationPermission !== 'granted') {
         await requestNotificationPermission();
       }
-      
+  
       if (notificationSettings.enabled && notificationPermission === 'granted') {
         await subscribeToPushNotifications();
+  
+        // === GENERATE NOTIFIKASI HARI INI ===
+        if (selectedProvince && selectedCity && schedule) {
+          try {
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.getSubscription();
+            if (subscription) {
+              await generateDailyNotifications(
+                subscription.endpoint,
+                selectedProvince.slug,
+                selectedCity.slug,
+                schedule.today_schedule,
+                notificationSettings.prayerTypes,
+                notificationSettings.advanceMinutes
+              );
+              toast.success('Notifikasi untuk hari ini telah dijadwalkan');
+            }
+          } catch (genError) {
+            console.error('Gagal generate notifikasi:', genError);
+          }
+        }
       }
-      
+  
       if (!notificationSettings.enabled && isSubscribed) {
         await unsubscribeFromPushNotifications();
       }
-
-      // === TAMBAHKAN INI: kirim preferensi ke service worker ===
+  
+      // Kirim preferensi ke service worker
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
           type: 'UPDATE_PRAYER_PREFERENCES',
@@ -387,7 +410,7 @@ export default function SchedulePage() {
           }
         });
       }
-      
+  
       toast.success('Pengaturan notifikasi disimpan');
     } catch (error) {
       console.error('Error saving notification settings:', error);

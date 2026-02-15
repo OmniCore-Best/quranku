@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { endpoint, keys, prayerTypes, advanceMinutes } = body;
+    const { endpoint, keys, prayerTypes, advanceMinutes, provinceSlug, citySlug } = body;
 
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return NextResponse.json(
@@ -23,6 +23,8 @@ export async function POST(request: NextRequest) {
           enabled: true,
           prayer_types: prayerTypes || ['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'],
           advance_minutes: advanceMinutes || 10,
+          province_slug: provinceSlug || null,
+          city_slug: citySlug || null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'endpoint' }
