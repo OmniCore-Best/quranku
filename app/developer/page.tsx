@@ -408,7 +408,7 @@ export default function DeveloperPage() {
 
               {/* Donate Section - Icons only with aria-label, including BTC and ETH */}
               <div className="mt-6">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">Donate</h2>
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">Buy me coffiee</h2>
                 <div className="flex flex-wrap gap-3">
                   {/* Saweria */}
                   <a
