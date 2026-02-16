@@ -18,10 +18,18 @@ import {
   FaFacebook,
   FaWhatsapp,
   FaUsers,
-  FaUser
+  FaUser,
+  FaCoffee,
+  FaCopy,
+  FaArrowLeft,
+  FaSpotify,
+  FaBitcoin,
+  FaEthereum,
+  FaCoins,
+  FaMoneyBillWave,
 } from 'react-icons/fa';
 import { FaCodeCommit } from "react-icons/fa6";
-import { SiTypescript, SiNextdotjs, SiTailwindcss } from 'react-icons/si';
+import { SiTypescript, SiNextdotjs, SiTailwindcss, SiReact, SiExpress } from 'react-icons/si';
 import { BiCodeAlt } from 'react-icons/bi';
 
 interface RepoData {
@@ -64,7 +72,7 @@ interface Commit {
 const REPO_CACHE_KEY = 'github_repo_cache';
 const CONTRIBUTORS_CACHE_KEY = 'github_contributors_cache';
 const COMMITS_CACHE_KEY = 'github_commits_cache';
-const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
 export default function DeveloperPage() {
   const [repoData, setRepoData] = useState<RepoData | null>(null);
@@ -238,7 +246,9 @@ export default function DeveloperPage() {
   const skills = [
     { name: 'JavaScript', icon: <FaJs className="text-yellow-500" /> },
     { name: 'TypeScript', icon: <SiTypescript className="text-blue-600" /> },
+    { name: 'React', icon: <SiReact className="text-blue-400" /> },
     { name: 'Next.js', icon: <SiNextdotjs className="text-black" /> },
+    { name: 'Express', icon: <SiExpress className="text-gray-600" /> },
     { name: 'Python', icon: <FaPython className="text-blue-500" /> },
     { name: 'Tailwind CSS', icon: <SiTailwindcss className="text-cyan-500" /> },
   ];
@@ -270,6 +280,14 @@ export default function DeveloperPage() {
       url: 'https://whatsapp.com/channel/0029VbBjOdCEAKW7afdv7g2y',
       color: 'bg-green-500',
     },
+  ];
+
+  // Crypto addresses
+  const cryptoAddresses = [
+    { name: 'BTC', address: '1Lzfk3fv3iVFW1DLESEcsgqT1vbpo1eSc5', icon: <FaBitcoin className="w-4 h-4 text-orange-500" /> },
+    { name: 'ETH', address: '0x0dED3c0B467093075B096394AA63E13F8298FC93', icon: <FaEthereum className="w-4 h-4 text-blue-500" /> },
+    { name: 'ETC', address: '0xBcfF4D280b096F28F8D580B0b008E16BcfBd64b7', icon: <FaCoins className="w-4 h-4 text-gray-600" /> },
+    { name: 'AUSD', address: '0x0dED3c0B467093075B096394AA63E13F8298FC93', icon: <FaMoneyBillWave className="w-4 h-4 text-green-600" /> },
   ];
 
   // Skeleton components
@@ -319,24 +337,12 @@ export default function DeveloperPage() {
             href="/"
             className="inline-flex items-center text-emerald-700 hover:text-emerald-800 transition"
           >
-            <svg
-              className="w-5 h-5 mr-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
+            <FaArrowLeft className="w-5 h-5 mr-2" />
             Back
           </Link>
         </div>
 
-        {/* Profile Card (statis, tanpa skeleton) */}
+        {/* Profile Card */}
         <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 overflow-hidden mb-6 transition-opacity duration-500">
           <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-32"></div>
           <div className="relative px-6 pb-6">
@@ -384,42 +390,38 @@ export default function DeveloperPage() {
                 </div>
               </div>
 
+              {/* Donation buttons - only icons with aria-label */}
               <div className="mt-6 flex flex-wrap gap-3">
                 <a
                   href="https://saweria.co/thisssskeyyyy"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-sm"
+                  aria-label="Donate via Saweria"
+                  className="inline-flex items-center justify-center p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-sm"
                 >
-                  <FaHeart className="w-4 h-4" />
-                  Saweria
+                  <FaHeart className="w-5 h-5" />
                 </a>
                 <a
                   href="https://ko-fi.com/devnova_id"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shadow-sm"
+                  aria-label="Support on Ko-fi"
+                  className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shadow-sm"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-1.137.416-1.137.416L2.7 19.071c.273 1.436 1.565 2.472 3.051 2.472h10.678c1.47 0 2.764-1.036 3.037-2.472l1.105-5.572h2.858c2.922 0 4.346-2.858 3.592-6.551zm-3.188 4.57h-2.087l.741-3.744h2.069c1.544 0 2.123 1.166 2.123 1.866 0 .708-.534 1.878-2.846 1.878z" />
-                  </svg>
-                  Ko-fi
+                  <FaCoffee className="w-5 h-5" />
                 </a>
                 <a
                   href={repoData?.html_url || '#'}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition shadow-sm"
+                  aria-label="GitHub Repository"
+                  className="inline-flex items-center justify-center p-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition shadow-sm"
                 >
-                  <FaGithub className="w-4 h-4" />
-                  GitHub
+                  <FaGithub className="w-5 h-5" />
                 </a>
               </div>
 
+              {/* Social links */}
               <div className="mt-6">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Connect</h2>
                 <div className="flex flex-wrap gap-3">
@@ -438,6 +440,29 @@ export default function DeveloperPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Crypto Donations */}
+              <div className="mt-6">
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">Crypto Donations</h2>
+                <div className="space-y-2">
+                  {cryptoAddresses.map((crypto) => (
+                    <div key={crypto.name} className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded-lg">
+                      <span className="flex-shrink-0">{crypto.icon}</span>
+                      <span className="font-medium text-gray-700">{crypto.name}:</span>
+                      <code className="text-xs bg-gray-200 px-2 py-1 rounded flex-1 truncate" title={crypto.address}>
+                        {crypto.address}
+                      </code>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(crypto.address)}
+                        className="text-emerald-600 hover:text-emerald-700"
+                        aria-label={`Copy ${crypto.name} address`}
+                      >
+                        <FaCopy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -445,9 +470,7 @@ export default function DeveloperPage() {
         {/* Spotify Embed - Developer's Playlist */}
         <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-6 transition-opacity duration-500">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-            </svg>
+            <FaSpotify className="w-5 h-5 text-green-500" />
             Developer&apos;s Playlist
           </h2>
           <iframe
