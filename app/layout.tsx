@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from 'sonner';
 import "./globals.css";
 import BottomNav from "@/components/ui/BottomNav";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
@@ -100,6 +101,7 @@ export default function RootLayout({
         <BottomNav />
         <ServiceWorkerRegistration />
         <InstallPrompt /> 
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   );

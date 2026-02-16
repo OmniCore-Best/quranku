@@ -1,8 +1,11 @@
-const STATIC_CACHE = 'quranku-static-v14';
-const DYNAMIC_CACHE = 'quranku-dynamic-v14';
-const QURAN_API_CACHE = 'quran-api-cache-v14';
-const AUDIO_CACHE = 'quran-audio-cache-v14';
+const CACHE_VERSION = 'v15'; 
 
+const STATIC_CACHE = `quranku-static-${CACHE_VERSION}`;
+const DYNAMIC_CACHE = `quranku-dynamic-${CACHE_VERSION}`;
+const QURAN_API_CACHE = `quran-api-cache-${CACHE_VERSION}`;
+const AUDIO_CACHE = `quran-audio-cache-${CACHE_VERSION}`;
+
+// Daftar aset statis yang akan di-cache saat install
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -34,13 +37,8 @@ self.addEventListener('install', event => {
       try {
         const cache = await caches.open(STATIC_CACHE);
         console.log('[Service Worker] Caching static assets');
-        
-        // Cache semua aset statis
         await cache.addAll(STATIC_ASSETS);
-        
-        // Skip waiting agar segera aktif
-        self.skipWaiting();
-        
+        self.skipWaiting(); // Langsung aktifkan service worker baru
         console.log('[Service Worker] Install completed');
       } catch (error) {
         console.error('[Service Worker] Install failed:', error);
@@ -55,28 +53,27 @@ self.addEventListener('activate', event => {
   
   event.waitUntil(
     (async () => {
-      // Hapus cache lama
+      // Hapus semua cache lama yang tidak sesuai dengan versi saat ini
       const cacheKeys = await caches.keys();
       await Promise.all(
         cacheKeys.map(cacheName => {
-          if (![STATIC_CACHE, DYNAMIC_CACHE, QURAN_API_CACHE, AUDIO_CACHE].includes(cacheName)) {
-            console.log('[Service Worker] Deleting old cache:', cacheName);
+          if (!cacheName.includes(CACHE_VERSION)) {
+            console.log('[Service Worker] Menghapus cache lama:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
       
-      // Klaim klien segera
+      // Klaim kontrol semua halaman yang terbuka
       await self.clients.claim();
-      
       console.log('[Service Worker] Activation completed');
       
-      // Kirim pesan ke semua klien bahwa SW aktif
+      // Beri tahu semua klien bahwa service worker aktif
       const clients = await self.clients.matchAll();
       clients.forEach(client => {
         client.postMessage({
           type: 'SW_ACTIVATED',
-          version: 'v14'
+          version: CACHE_VERSION
         });
       });
     })()
@@ -86,26 +83,25 @@ self.addEventListener('activate', event => {
 // ================= MESSAGE HANDLER =================
 self.addEventListener('message', event => {
   console.log('[Service Worker] Message received:', event.data);
-  
+
+  if (event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+
   if (event.data.type === 'CACHE_AUDIO') {
-    // Pre-cache audio untuk surah tertentu
     event.waitUntil(cacheAudioForSurah(event.data.surahId, event.data.audioUrls));
   }
-  
+
   if (event.data.type === 'GET_CACHE_INFO') {
-    // Kembalikan informasi cache ke klien
     event.waitUntil(
       (async () => {
         const cacheNames = await caches.keys();
         const cacheSizes = {};
-        
         for (const name of cacheNames) {
           const cache = await caches.open(name);
           const keys = await cache.keys();
           cacheSizes[name] = keys.length;
         }
-        
-        // Kirim balik ke klien
         if (event.source) {
           event.source.postMessage({
             type: 'CACHE_INFO',
@@ -129,113 +125,19 @@ self.addEventListener('fetch', event => {
   
   // ===== 1. FONT GOOGLE (Cache First) =====
   if (url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com') {
-    event.respondWith(
-      (async () => {
-        const cache = await caches.open(STATIC_CACHE);
-        const cached = await cache.match(event.request);
-        
-        if (cached) {
-          return cached;
-        }
-        
-        try {
-          const response = await fetch(event.request);
-          if (response.status === 200) {
-            await cache.put(event.request, response.clone());
-          }
-          return response;
-        } catch (error) {
-          // Return offline fallback untuk font
-          return new Response('', { 
-            status: 200,
-            headers: { 'Content-Type': 'text/css' }
-          });
-        }
-      })()
-    );
+    event.respondWith(cacheFirst(event.request, STATIC_CACHE));
     return;
   }
   
   // ===== 2. AUDIO (Cache with network fallback) =====
   if (url.origin === 'https://cdn.equran.id') {
-    event.respondWith(
-      (async () => {
-        // Coba cache audio terlebih dahulu
-        const audioCache = await caches.open(AUDIO_CACHE);
-        const cachedAudio = await audioCache.match(event.request);
-        
-        if (cachedAudio) {
-          return cachedAudio;
-        }
-        
-        // Jika tidak ada di cache, fetch dari network
-        try {
-          const response = await fetch(event.request);
-          if (response.status === 200) {
-            // Simpan ke cache untuk penggunaan berikutnya
-            await audioCache.put(event.request, response.clone());
-          }
-          return response;
-        } catch (error) {
-          // Jika offline dan audio tidak ada di cache, kembalikan respons 404
-          return new Response('', {
-            status: 404,
-            statusText: 'Audio not available offline'
-          });
-        }
-      })()
-    );
+    event.respondWith(networkFirstWithCache(event.request, AUDIO_CACHE));
     return;
   }
   
   // ===== 3. API QURAN (Stale-While-Revalidate) =====
   if (url.href.includes('api.devnova.icu/api/islamic/al-quran')) {
-    event.respondWith(
-      (async () => {
-        const cache = await caches.open(QURAN_API_CACHE);
-        const cached = await cache.match(event.request);
-        
-        // Selalu return cache jika ada (bahkan jika ada error)
-        if (cached) {
-          // Update di background
-          event.waitUntil(
-            (async () => {
-              try {
-                const response = await fetch(event.request);
-                if (response.status === 200) {
-                  await cache.put(event.request, response.clone());
-                }
-              } catch (error) {
-                // Jika gagal fetch, tetap gunakan cache yang ada
-                console.log('[Service Worker] Background update failed:', error);
-              }
-            })()
-          );
-          return cached;
-        }
-        
-        // Jika tidak ada cache, fetch dari network
-        try {
-          const response = await fetch(event.request);
-          if (response.status === 200) {
-            await cache.put(event.request, response.clone());
-          }
-          return response;
-        } catch (error) {
-          // Jika offline dan tidak ada cache
-          return new Response(
-            JSON.stringify({
-              code: 503,
-              message: 'You are offline. Using cached data if available.'
-            }),
-            {
-              status: 503,
-              headers: { 'Content-Type': 'application/json' }
-            }
-          );
-        }
-      })()
-    );
+    event.respondWith(staleWhileRevalidate(event.request, QURAN_API_CACHE));
     return;
   }
   
@@ -245,72 +147,84 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // ===== 5. NAVIGATION (Cache First, Network Fallback) =====
+  // ===== 5. NAVIGASI (Stale-While-Revalidate) =====
   if (event.request.mode === 'navigate') {
-    event.respondWith(
-      (async () => {
-        try {
-          // Coba cache terlebih dahulu
-          const cache = await caches.open(DYNAMIC_CACHE);
-          const cached = await cache.match(event.request);
-          
-          if (cached) {
-            return cached;
-          }
-          
-          // Jika tidak ada di cache, fetch dari network
-          const response = await fetch(event.request);
-          
-          // Cache respons yang valid
-          if (response.status === 200 && response.type === 'basic') {
-            await cache.put(event.request, response.clone());
-          }
-          
-          return response;
-        } catch (error) {
-          // Jika offline dan halaman tidak ada di cache
-          const offlinePage = await caches.match('/offline.html');
-          if (offlinePage) {
-            return offlinePage;
-          }
-          
-          // Fallback ke respons offline
-          return new Response(
-            '<h1>Offline</h1><p>Please check your internet connection.</p>',
-            {
-              status: 503,
-              headers: { 'Content-Type': 'text/html' }
-            }
-          );
-        }
-      })()
-    );
+    event.respondWith(staleWhileRevalidate(event.request, DYNAMIC_CACHE));
     return;
   }
   
   // ===== 6. STATIC ASSETS (Cache First) =====
-  event.respondWith(
-    (async () => {
-      const cache = await caches.open(STATIC_CACHE);
-      const cached = await cache.match(event.request);
-      
-      if (cached) {
-        return cached;
-      }
-      
-      try {
-        const response = await fetch(event.request);
-        if (response.status === 200) {
-          await cache.put(event.request, response.clone());
-        }
-        return response;
-      } catch (error) {
-        // Return empty response jika offline
-        return new Response('', { status: 404 });
-      }
-    })()
-  );
+  event.respondWith(cacheFirst(event.request, STATIC_CACHE));
 });
+
+// ================= STRATEGI CACHING =================
+
+// Cache First: coba ambil dari cache, jika tidak ada baru fetch dan simpan
+async function cacheFirst(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  
+  try {
+    const response = await fetch(request);
+    if (response.status === 200) {
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    return new Response('', { status: 404 });
+  }
+}
+
+// Stale-While-Revalidate: kembalikan cache (jika ada), sambil update di background
+async function staleWhileRevalidate(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  
+  const networkPromise = fetch(request)
+    .then(response => {
+      if (response.status === 200) {
+        cache.put(request, response.clone());
+      }
+      return response;
+    })
+    .catch(() => null);
+  
+  // Jika ada cache, kembalikan segera dan update di background
+  if (cached) {
+    networkPromise.then(() => {}); // trigger background update
+    return cached;
+  }
+  
+  // Jika tidak ada cache, tunggu network
+  const networkResponse = await networkPromise;
+  if (networkResponse) return networkResponse;
+  
+  // Fallback offline untuk navigasi
+  if (request.mode === 'navigate') {
+    const offlinePage = await caches.match('/offline.html');
+    if (offlinePage) return offlinePage;
+  }
+  
+  return new Response('', { status: 404 });
+}
+
+// Network First: coba fetch, jika gagal ambil dari cache
+async function networkFirstWithCache(request, cacheName) {
+  try {
+    const response = await fetch(request);
+    if (response.status === 200) {
+      const cache = await caches.open(cacheName);
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    const cache = await caches.open(cacheName);
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    return new Response('', { status: 404, statusText: 'Not available offline' });
+  }
+}
 
 // ================= FUNGSI PEMBANTU CACHING =================
 async function cacheAudioForSurah(surahId, audioUrls) {
@@ -332,7 +246,6 @@ async function cacheAudioForSurah(surahId, audioUrls) {
     
     console.log(`[Service Worker] Cached ${cachedCount} audio files for surah ${surahId}`);
     
-    // Beri tahu klien
     const clients = await self.clients.matchAll();
     clients.forEach(client => {
       client.postMessage({
