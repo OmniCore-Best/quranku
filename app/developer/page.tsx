@@ -272,6 +272,44 @@ export default function DeveloperPage() {
     },
   ];
 
+  // Skeleton components
+  const SkeletonRepoStats = () => (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-pulse">
+      {[...Array(4)].map((_, i) => (
+        <div key={i} className="bg-emerald-50 rounded-lg p-3 text-center">
+          <div className="h-6 w-12 bg-emerald-200 rounded mx-auto mb-1"></div>
+          <div className="h-3 w-16 bg-emerald-200 rounded mx-auto"></div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const SkeletonCommits = () => (
+    <div className="space-y-4 animate-pulse">
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="flex items-start gap-3 p-3">
+          <div className="w-10 h-10 bg-emerald-200 rounded-full"></div>
+          <div className="flex-1">
+            <div className="h-4 bg-emerald-200 rounded w-3/4 mb-2"></div>
+            <div className="h-3 bg-emerald-200 rounded w-1/2"></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const SkeletonContributors = () => (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 animate-pulse">
+      {[...Array(4)].map((_, i) => (
+        <div key={i} className="flex flex-col items-center p-3 bg-emerald-50 rounded-lg">
+          <div className="w-16 h-16 bg-emerald-200 rounded-full mb-2"></div>
+          <div className="h-3 w-20 bg-emerald-200 rounded mb-1"></div>
+          <div className="h-2 w-12 bg-emerald-200 rounded"></div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white pb-20">
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -298,11 +336,10 @@ export default function DeveloperPage() {
           </Link>
         </div>
 
-        {/* Profile Card */}
-        <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 overflow-hidden mb-6">
+        {/* Profile Card (statis, tanpa skeleton) */}
+        <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 overflow-hidden mb-6 transition-opacity duration-500">
           <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-32"></div>
           <div className="relative px-6 pb-6">
-            {/* Profile Picture */}
             <div className="absolute -top-16 left-6">
               <div className="w-28 h-28 rounded-full border-4 border-white shadow-lg overflow-hidden bg-white">
                 <Image
@@ -316,10 +353,9 @@ export default function DeveloperPage() {
               </div>
             </div>
 
-            {/* Developer Info */}
             <div className="pt-16">
-              <h1 className="text-2xl font-bold text-gray-900">devnova-id</h1>
-              <p className="text-gray-600 mt-1">quranku Developer</p>
+              <h1 className="text-2xl font-bold text-gray-900">this key</h1>
+              <p className="text-gray-600 mt-1">FullStack Developer</p>
               <p className="text-sm text-gray-500 mt-2 flex items-center gap-1">
                 <FaEnvelope className="w-4 h-4" />
                 <a
@@ -330,7 +366,6 @@ export default function DeveloperPage() {
                 </a>
               </p>
 
-              {/* Skills */}
               <div className="mt-4">
                 <h2 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
                   <BiCodeAlt className="w-4 h-4" />
@@ -349,7 +384,6 @@ export default function DeveloperPage() {
                 </div>
               </div>
 
-              {/* Support Links */}
               <div className="mt-6 flex flex-wrap gap-3">
                 <a
                   href="https://saweria.co/thisssskeyyyy"
@@ -386,7 +420,6 @@ export default function DeveloperPage() {
                 </a>
               </div>
 
-              {/* Social Media */}
               <div className="mt-6">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Connect</h2>
                 <div className="flex flex-wrap gap-3">
@@ -409,26 +442,39 @@ export default function DeveloperPage() {
           </div>
         </div>
 
+        {/* Spotify Embed - Developer's Playlist */}
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-6 transition-opacity duration-500">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            </svg>
+            Developer&apos;s Playlist
+          </h2>
+          <iframe
+            src="https://open.spotify.com/embed/playlist/4JaY2zqvVCVENkOpDQrZcr?utm_source=generator&theme=0"
+            width="100%"
+            height="352"
+            frameBorder="0"
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy"
+            className="rounded-lg"
+          ></iframe>
+        </div>
+
         {/* GitHub Repository Stats */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-6 transition-opacity duration-500">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <FaGithub className="w-5 h-5" />
             quranku Repository
           </h2>
 
-          {loading && (
-            <div className="flex justify-center py-8">
-              <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-
-          {error && (
+          {loading ? (
+            <SkeletonRepoStats />
+          ) : error ? (
             <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm">
               {error}
             </div>
-          )}
-
-          {repoData && !loading && (
+          ) : repoData ? (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="bg-emerald-50 rounded-lg p-3 text-center">
@@ -482,109 +528,119 @@ export default function DeveloperPage() {
                 <FaExternalLinkAlt className="w-3 h-3" />
               </a>
             </>
-          )}
+          ) : null}
         </div>
 
         {/* Recent Commits */}
-        {commits.length > 0 && (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <FaCodeCommit className="w-5 h-5" />
-              Recent Commits
-            </h2>
-            <div className="space-y-4">
-              {commits.map((commit) => (
-                <a
-                  key={commit.sha}
-                  href={commit.html_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block hover:bg-emerald-50 p-3 rounded-lg transition -mx-3"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0">
-                      {commit.author?.avatar_url ? (
-                        <img
-                          src={commit.author.avatar_url}
-                          alt={commit.author.login}
-                          className="w-10 h-10 rounded-full"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                          <FaUser className="w-5 h-5 text-emerald-600" />
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-6 transition-opacity duration-500">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <FaCodeCommit className="w-5 h-5" />
+            Recent Commits
+          </h2>
+
+          {loading ? (
+            <SkeletonCommits />
+          ) : commits.length > 0 ? (
+            <>
+              <div className="space-y-4">
+                {commits.map((commit) => (
+                  <a
+                    key={commit.sha}
+                    href={commit.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block hover:bg-emerald-50 p-3 rounded-lg transition -mx-3"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0">
+                        {commit.author?.avatar_url ? (
+                          <img
+                            src={commit.author.avatar_url}
+                            alt={commit.author.login}
+                            className="w-10 h-10 rounded-full"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                            <FaUser className="w-5 h-5 text-emerald-600" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {truncateMessage(commit.commit.message, 70)}
+                        </p>
+                        <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+                          <span className="truncate max-w-[120px]">
+                            {commit.commit.author.name}
+                          </span>
+                          <span>•</span>
+                          <span>{formatRelativeTime(commit.commit.author.date)}</span>
                         </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {truncateMessage(commit.commit.message, 70)}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
-                        <span className="truncate max-w-[120px]">
-                          {commit.commit.author.name}
+                      </div>
+                      <div className="flex-shrink-0">
+                        <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                          {commit.sha.substring(0, 7)}
                         </span>
-                        <span>•</span>
-                        <span>{formatRelativeTime(commit.commit.author.date)}</span>
                       </div>
                     </div>
-                    <div className="flex-shrink-0">
-                      <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                        {commit.sha.substring(0, 7)}
-                      </span>
-                    </div>
-                  </div>
-                </a>
-              ))}
-            </div>
-            <a
-              href={`${repoData?.html_url}/commits`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 inline-flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-700 transition"
-            >
-              View all commits
-              <FaExternalLinkAlt className="w-3 h-3" />
-            </a>
-          </div>
-        )}
+                  </a>
+                ))}
+              </div>
+              <a
+                href={`${repoData?.html_url}/commits`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-700 transition"
+              >
+                View all commits
+                <FaExternalLinkAlt className="w-3 h-3" />
+              </a>
+            </>
+          ) : null}
+        </div>
 
         {/* Contributors Section */}
         {contributors.length > 0 && (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-6">
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-6 transition-opacity duration-500">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <FaUsers className="w-5 h-5" />
               Contributors
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {contributors.map((contributor) => (
-                <a
-                  key={contributor.id}
-                  href={contributor.html_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex flex-col items-center p-3 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition"
-                >
-                  <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-emerald-200 mb-2">
-                    <img
-                      src={contributor.avatar_url}
-                      alt={contributor.login}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <span className="text-sm font-medium text-gray-800 text-center truncate w-full">
-                    {contributor.login}
-                  </span>
-                  <span className="text-xs text-emerald-600 mt-1">
-                    {contributor.contributions} commits
-                  </span>
-                </a>
-              ))}
-            </div>
+
+            {loading ? (
+              <SkeletonContributors />
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {contributors.map((contributor) => (
+                  <a
+                    key={contributor.id}
+                    href={contributor.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center p-3 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition"
+                  >
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-emerald-200 mb-2">
+                      <img
+                        src={contributor.avatar_url}
+                        alt={contributor.login}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className="text-sm font-medium text-gray-800 text-center truncate w-full">
+                      {contributor.login}
+                    </span>
+                    <span className="text-xs text-emerald-600 mt-1">
+                      {contributor.contributions} commits
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* Data Sources */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6 transition-opacity duration-500">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <FaLink className="w-5 h-5" />
             Data Sources
@@ -615,7 +671,7 @@ export default function DeveloperPage() {
         </div>
       </div>
 
-      {/* Add custom xs breakpoint for inline social names */}
+      {/* Custom breakpoint for social names */}
       <style jsx>{`
         @media (min-width: 480px) {
           .xs\\:inline {
