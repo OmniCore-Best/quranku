@@ -2,13 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { 
-  generateDailyNotifications, 
-  parseIndonesianDate
-} from '@/lib/prayer-notifications';
-import { 
   FaMapMarkerAlt, 
-  FaBell, 
-  FaBellSlash, 
   FaSync, 
   FaCalendarAlt,
   FaClock,
@@ -20,7 +14,6 @@ import {
   FaMoon,
   FaSun,
   FaCloudMoon,
-  FaSave,
   FaDatabase,
   FaCloudDownloadAlt,
   FaExclamationTriangle
@@ -79,12 +72,6 @@ interface PrayerSchedule {
   monthly_schedule: MonthlyScheduleDay[];
 }
 
-interface NotificationSettings {
-  enabled: boolean;
-  advanceMinutes: number;
-  prayerTypes: string[];
-}
-
 // ==================== MAIN COMPONENT ====================
 
 export default function SchedulePage() {
@@ -105,32 +92,11 @@ export default function SchedulePage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreProvinces, setHasMoreProvinces] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
-  const [isSubscribed, setIsSubscribed] = useState(false);
   const [showMonthlyView, setShowMonthlyView] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
-    enabled: false,
-    advanceMinutes: 10,
-    prayerTypes: ['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya']
-  });
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [daysToShow, setDaysToShow] = useState(7);
 
   // ==================== UTILITY FUNCTIONS ====================
-
-  // Fungsi konversi VAPID public key dari base64 ke Uint8Array
-  function urlBase64ToUint8Array(base64String: string) {
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-    const rawData = atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  }
 
   const getPrayerIcon = (prayerName: string) => {
     const lowerName = prayerName.toLowerCase();
@@ -145,33 +111,6 @@ export default function SchedulePage() {
     if (lowerName.includes('isya')) return <FaMoon className="w-4 h-4" />;
     return <FaClock className="w-4 h-4" />;
   };
-
-  // ==================== FUNGSI BARU UNTUK MENGAMBIL WAKTU SHOLAT ====================
-  const getPrayerTimeFromSchedule = useCallback((prayerName: string): string => {
-    if (!schedule) return '--:--';
-    
-    // Mapping nama sholat yang kita gunakan di UI ke kemungkinan nama dari API
-    const prayerMapping: Record<string, string[]> = {
-      imsak: ['imsak', 'imsyak'],
-      subuh: ['subuh', 'shubuh'],
-      dzuhur: ['dzuhur', 'dhuhur', 'zuhur'],
-      ashar: ['ashar', 'asr'],
-      maghrib: ['maghrib'],
-      isya: ['isya', 'isya\'', 'isha']
-    };
-    
-    const possibleNames = prayerMapping[prayerName.toLowerCase()] || [prayerName];
-    
-    // Cari di today_schedule.prayers
-    for (const name of possibleNames) {
-      const prayer = schedule.today_schedule.prayers.find(
-        p => p.name.toLowerCase() === name.toLowerCase()
-      );
-      if (prayer) return prayer.time_24h;
-    }
-    
-    return '--:--';
-  }, [schedule]);
 
   const formatTime = (time24h: string) => {
     const [hours, minutes] = time24h.split(':').map(Number);
@@ -209,16 +148,6 @@ export default function SchedulePage() {
     city.slug.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const togglePrayerType = (prayerType: string) => {
-    setNotificationSettings(prev => {
-      const prayerTypes = prev.prayerTypes.includes(prayerType)
-        ? prev.prayerTypes.filter(type => type !== prayerType)
-        : [...prev.prayerTypes, prayerType];
-      
-      return { ...prev, prayerTypes };
-    });
-  };
-
   const loadMoreDays = () => {
     if (schedule) {
       const maxDays = schedule.monthly_schedule.length;
@@ -234,195 +163,6 @@ export default function SchedulePage() {
   };
 
   // ==================== API FUNCTIONS ====================
-
-  const checkNotificationPermission = () => {
-    if ('Notification' in window) {
-      setNotificationPermission(Notification.permission);
-    }
-  };
-
-  // ==================== PERBAIKAN UTAMA ====================
-  const loadNotificationSettings = async () => {
-    try {
-      const saved = localStorage.getItem('prayerNotificationSettings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Gabungkan dengan default, pastikan prayerTypes array dan mengandung 'imsak'
-        const prayerTypes = parsed.prayerTypes && Array.isArray(parsed.prayerTypes) 
-          ? parsed.prayerTypes 
-          : ['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'];
-        
-        // Tambahkan imsak jika belum ada (agar tidak hilang)
-        if (!prayerTypes.includes('imsak')) {
-          prayerTypes.push('imsak');
-        }
-
-        setNotificationSettings({
-          enabled: parsed.enabled ?? false,
-          advanceMinutes: parsed.advanceMinutes ?? 10,
-          prayerTypes: prayerTypes,
-        });
-      }
-      
-      if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
-        setIsSubscribed(!!subscription);
-      }
-    } catch (error) {
-      console.error('Error loading notification settings:', error);
-    }
-  };
-
-  const subscribeToPushNotifications = async () => {
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      let subscription = await registration.pushManager.getSubscription();
-  
-      if (!subscription) {
-        const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-        if (!vapidPublicKey) {
-          toast.error('VAPID public key tidak ditemukan');
-          return;
-        }
-        const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
-  
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: applicationServerKey
-        });
-      }
-  
-      const response = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          endpoint: subscription.endpoint,
-          keys: subscription.toJSON().keys,
-          prayerTypes: notificationSettings.prayerTypes,
-          advanceMinutes: notificationSettings.advanceMinutes,
-          provinceSlug: selectedProvince?.slug,   // <-- tambahkan
-          citySlug: selectedCity?.slug             // <-- tambahkan
-        }),
-      });
-  
-      if (response.ok) {
-        setIsSubscribed(true);
-        toast.success('Berhasil berlangganan notifikasi');
-      } else {
-        const error = await response.json();
-        toast.error('Gagal berlangganan: ' + (error.error || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('Error subscribing to push:', error);
-      toast.error('Gagal mendaftarkan notifikasi push: ' + (error as Error).message);
-    }
-  };
-
-  const unsubscribeFromPushNotifications = async () => {
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      
-      if (subscription) {
-        await subscription.unsubscribe();
-        
-        await fetch('/api/push/subscribe', {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ endpoint: subscription.endpoint }),
-        });
-        
-        setIsSubscribed(false);
-        console.log('Push subscription dihentikan');
-      }
-    } catch (error) {
-      console.error('Error unsubscribing from push:', error);
-    }
-  };
-
-  const requestNotificationPermission = async () => {
-    if (!('Notification' in window)) {
-      toast.error('Browser tidak mendukung notifikasi');
-      return;
-    }
-
-    try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-      
-      if (permission === 'granted') {
-        await subscribeToPushNotifications();
-        toast.success('Notifikasi diaktifkan');
-      } else {
-        toast.warning('Izin notifikasi ditolak');
-      }
-    } catch (error) {
-      console.error('Error requesting notification permission:', error);
-      toast.error('Gagal mengaktifkan notifikasi');
-    }
-  };
-
-  const saveNotificationSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      localStorage.setItem('prayerNotificationSettings', JSON.stringify(notificationSettings));
-  
-      if (notificationSettings.enabled && notificationPermission !== 'granted') {
-        await requestNotificationPermission();
-      }
-  
-      if (notificationSettings.enabled && notificationPermission === 'granted') {
-        await subscribeToPushNotifications();
-  
-        if (selectedProvince && selectedCity && schedule) {
-          try {
-            const registration = await navigator.serviceWorker.ready;
-            const subscription = await registration.pushManager.getSubscription();
-            if (subscription) {
-              const dateStr = parseIndonesianDate(schedule.city.date_today);
-              await generateDailyNotifications(
-                subscription.endpoint,
-                selectedProvince.slug,
-                selectedCity.slug,
-                schedule.today_schedule,
-                notificationSettings.prayerTypes,
-                notificationSettings.advanceMinutes,
-                dateStr
-              );
-              toast.success('Notifikasi untuk hari ini telah dijadwalkan');
-            }
-          } catch (genError) {
-            console.error('Gagal generate notifikasi:', genError);
-          }
-        }
-      }
-  
-      if (!notificationSettings.enabled && isSubscribed) {
-        await unsubscribeFromPushNotifications();
-      }
-  
-      // Kirim preferensi ke service worker
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({
-          type: 'UPDATE_PRAYER_PREFERENCES',
-          data: {
-            prayerTypes: notificationSettings.prayerTypes,
-            advanceMinutes: notificationSettings.advanceMinutes
-          }
-        });
-      }
-  
-      toast.success('Pengaturan notifikasi disimpan');
-    } catch (error) {
-      console.error('Error saving notification settings:', error);
-      toast.error('Gagal menyimpan pengaturan');
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
 
   const fetchProvinces = async (page: number = 1) => {
     if (loading.provinces) return;
@@ -654,10 +394,6 @@ export default function SchedulePage() {
           city_slug: selectedCity.slug
         };
         localStorage.setItem('prayerLocation', JSON.stringify(location));
-        
-        if (notificationSettings.enabled && isSubscribed) {
-          await schedulePrayerNotifications();
-        }
       } else {
         throw new Error('Invalid API response structure');
       }
@@ -666,59 +402,6 @@ export default function SchedulePage() {
       throw error;
     } finally {
       setLoading(prev => ({ ...prev, schedule: false }));
-    }
-  };
-
-  const schedulePrayerNotifications = async () => {
-    if (!schedule || !selectedProvince || !selectedCity) return;
-    
-    try {
-      const prayerNotifications = schedule.today_schedule.prayers
-        .filter(prayer => {
-          // Mapping untuk mencocokkan nama sholat dari API dengan prayerTypes
-          const prayerName = prayer.name.toLowerCase();
-          if (prayerName.includes('imsak') || prayerName.includes('imsyak')) {
-            return notificationSettings.prayerTypes.includes('imsak');
-          }
-          if (prayerName.includes('subuh')) {
-            return notificationSettings.prayerTypes.includes('subuh');
-          }
-          if (prayerName.includes('dzuhur') || prayerName.includes('dhuhur')) {
-            return notificationSettings.prayerTypes.includes('dzuhur');
-          }
-          if (prayerName.includes('ashar') || prayerName.includes('asr')) {
-            return notificationSettings.prayerTypes.includes('ashar');
-          }
-          if (prayerName.includes('maghrib')) {
-            return notificationSettings.prayerTypes.includes('maghrib');
-          }
-          if (prayerName.includes('isya')) {
-            return notificationSettings.prayerTypes.includes('isya');
-          }
-          return false;
-        })
-        .map(prayer => ({
-          name: prayer.name,
-          time: prayer.time_24h,
-          advanceMinutes: notificationSettings.advanceMinutes
-        }));
-      
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({
-          type: 'SCHEDULE_PRAYER_NOTIFICATIONS',
-          data: {
-            prayers: prayerNotifications,
-            location: {
-              province: selectedProvince.name,
-              city: selectedCity.name
-            }
-          }
-        });
-        
-        localStorage.setItem('prayerNotifications', JSON.stringify(prayerNotifications));
-      }
-    } catch (error) {
-      console.error('Error scheduling notifications:', error);
     }
   };
 
@@ -786,8 +469,6 @@ export default function SchedulePage() {
   }, [provinces]);
 
   useEffect(() => {
-    checkNotificationPermission();
-    loadNotificationSettings();
     fetchProvinces();
   }, []);
 
@@ -1284,7 +965,6 @@ export default function SchedulePage() {
                 <div className="relative z-10">
                   <div className="flex flex-col items-center text-center">
                     <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 rounded-full text-sm mb-4">
-                      <FaBell className="w-3 h-3" />
                       <span>Sholat Selanjutnya</span>
                     </div>
                     
@@ -1319,30 +999,6 @@ export default function SchedulePage() {
                     <div className="flex flex-col sm:flex-row gap-3 justify-center w-full max-w-md">
                       <button
                         onClick={() => {
-                          if (notificationSettings.enabled) {
-                            toast.success(
-                              <div className="flex items-center gap-2">
-                                <FaClock className="w-4 h-4" />
-                                <span>Pengingat untuk {schedule.today_schedule.next_prayer.name} telah diatur</span>
-                              </div>
-                            );
-                          } else {
-                            toast.info(
-                              <div className="flex items-center gap-2">
-                                <FaBell className="w-4 h-4" />
-                                <span>Aktifkan notifikasi untuk mendapatkan pengingat sholat</span>
-                              </div>
-                            );
-                          }
-                        }}
-                        className="px-6 py-3 bg-white text-emerald-700 rounded-xl font-bold hover:bg-slate-100 transition flex items-center justify-center gap-2 shadow-lg"
-                      >
-                        <FaBell className="w-4 h-4" />
-                        Ingatkan Saya
-                      </button>
-                      
-                      <button
-                        onClick={() => {
                           const shareText = `Waktu sholat ${schedule.today_schedule.next_prayer.name} di ${schedule.city.name} adalah ${schedule.today_schedule.next_prayer.time_24h}. Ayo sholat tepat waktu!`;
                           if (navigator.share) {
                             navigator.share({
@@ -1366,221 +1022,6 @@ export default function SchedulePage() {
                 </div>
               </motion.div>
             )}
-
-            {/* NOTIFICATION SETTINGS */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Pengaturan Notifikasi</h3>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Dapatkan pengingat sebelum waktu sholat
-                  </p>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <div className={`px-3 py-1.5 rounded-full text-sm font-medium ${
-                    notificationSettings.enabled
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    {notificationSettings.enabled ? 'Aktif' : 'Nonaktif'}
-                  </div>
-                  
-                  <button
-                    onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              
-              <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
-                  <div>
-                    <div className="font-medium text-slate-900">Notifikasi Sholat</div>
-                    <div className="text-sm text-slate-600">
-                      Dapatkan pengingat sebelum waktu sholat
-                    </div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={notificationSettings.enabled}
-                      onChange={(e) => {
-                        setNotificationSettings(prev => ({
-                          ...prev,
-                          enabled: e.target.checked
-                        }));
-                      }}
-                      className="sr-only peer"
-                    />
-                    <div className="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                  </label>
-                </div>
-                
-                {showAdvancedSettings && notificationSettings.enabled && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="bg-blue-50/50 rounded-xl p-5 border border-blue-100"
-                  >
-                    <div className="mb-5">
-                      <div className="font-medium text-slate-900 mb-3">Sholat yang diingatkan</div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'].map((prayer) => (
-                          <button
-                            key={prayer}
-                            onClick={() => togglePrayerType(prayer)}
-                            className={`px-4 py-3 rounded-lg border transition-all ${
-                              notificationSettings.prayerTypes.includes(prayer)
-                                ? 'bg-blue-100 border-blue-300 text-blue-700'
-                                : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="text-sm font-medium capitalize">{prayer}</div>
-                            <div className="text-xs text-slate-500 mt-1">
-                              {getPrayerTimeFromSchedule(prayer)}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="mb-5">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <div className="font-medium text-slate-900">Pengingat lebih awal</div>
-                          <div className="text-sm text-slate-600">
-                            Atur berapa menit sebelum waktu sholat
-                          </div>
-                        </div>
-                        <div className="text-2xl font-bold text-blue-600">
-                          {notificationSettings.advanceMinutes} mnt
-                        </div>
-                      </div>
-                      
-                      <input
-                        type="range"
-                        min="1"
-                        max="60"
-                        value={notificationSettings.advanceMinutes}
-                        onChange={(e) => setNotificationSettings(prev => ({
-                          ...prev,
-                          advanceMinutes: parseInt(e.target.value)
-                        }))}
-                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-600"
-                      />
-                      
-                      <div className="flex justify-between text-xs text-slate-500 mt-2">
-                        <span>1 menit</span>
-                        <span>60 menit</span>
-                      </div>
-                    </div>
-                    
-                    {notificationPermission === 'granted' ? (
-                      <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                            <FaBell className="w-4 h-4 text-emerald-600" />
-                          </div>
-                          <div>
-                            <div className="font-medium text-emerald-900">Notifikasi diizinkan</div>
-                            <div className="text-sm text-emerald-700">
-                              Anda akan menerima pengingat sholat
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : notificationPermission === 'denied' ? (
-                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <FaExclamationTriangle className="w-5 h-5 text-red-600" />
-                          <div>
-                            <div className="font-medium text-red-900">Izin ditolak</div>
-                            <div className="text-sm text-red-700">
-                              Aktifkan notifikasi di pengaturan browser
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <FaBell className="w-5 h-5 text-amber-600" />
-                          <div>
-                            <div className="font-medium text-amber-900">Izin diperlukan</div>
-                            <div className="text-sm text-amber-700">
-                              Klik Simpan untuk meminta izin notifikasi
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-                
-                <div className="flex flex-col sm:flex-row gap-3 justify-end">
-                  <button
-                    onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-                    className="px-4 py-3 text-slate-700 hover:bg-slate-100 rounded-xl transition"
-                  >
-                    {showAdvancedSettings ? 'Sembunyikan' : 'Pengaturan Lanjutan'}
-                  </button>
-                  
-                  <button
-                    onClick={saveNotificationSettings}
-                    disabled={isSavingSettings}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-bold hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-200"
-                  >
-                    {isSavingSettings ? (
-                      <>
-                        <FaSync className="w-4 h-4 animate-spin" />
-                        Menyimpan...
-                      </>
-                    ) : (
-                      <>
-                        <FaSave className="w-4 h-4" />
-                        Simpan Pengaturan
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* TOMBOL TEST NOTIFIKASI (OPSIONAL) */}
-            <div className="mt-4 flex justify-center">
-              <button
-                onClick={async () => {
-                  const res = await fetch('/api/push/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      title: '🔔 Notifikasi Test',
-                      body: 'Ini adalah notifikasi uji coba dari aplikasi quranku',
-                      url: '/schedule'
-                    })
-                  });
-                  const data = await res.json();
-                  if (data.success) {
-                    toast.success(`Notifikasi dikirim ke ${data.results.length} perangkat`);
-                  } else {
-                    toast.error('Gagal mengirim notifikasi');
-                  }
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                Kirim Notifikasi Test
-              </button>
-            </div>
 
             {!isOnline && (
               <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
