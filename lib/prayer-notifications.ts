@@ -9,7 +9,27 @@ export interface DailySchedule {
 }
 
 /**
+ * Mengonversi tanggal Indonesia "16 Feb 2026" menjadi "2026-02-16"
+ */
+export function parseIndonesianDate(dateStr: string): string {
+  const months: Record<string, string> = {
+    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+    'Mei': '05', 'Jun': '06', 'Jul': '07', 'Agt': '08',
+    'Sep': '09', 'Okt': '10', 'Nov': '11', 'Des': '12'
+  };
+  const [day, month, year] = dateStr.split(' ');
+  return `${year}-${months[month]}-${day.padStart(2, '0')}`;
+}
+
+/**
  * Menghasilkan notifikasi untuk satu hari berdasarkan jadwal sholat
+ * @param endpoint endpoint push subscription
+ * @param provinceSlug slug provinsi
+ * @param citySlug slug kota
+ * @param schedule jadwal hari ini (today_schedule)
+ * @param prayerTypes daftar sholat yang ingin diingatkan
+ * @param advanceMinutes menit sebelum waktu sholat
+ * @param dateStr tanggal lokal dalam format YYYY-MM-DD (contoh: 2026-02-16)
  */
 export async function generateDailyNotifications(
   endpoint: string,
@@ -17,21 +37,25 @@ export async function generateDailyNotifications(
   citySlug: string,
   schedule: DailySchedule,
   prayerTypes: string[],
-  advanceMinutes: number
+  advanceMinutes: number,
+  dateStr: string // YYYY-MM-DD lokal
 ): Promise<void> {
-  const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-  const now = new Date();
   const timeZone = 'Asia/Jakarta';
+  const now = new Date();
 
-  // Hapus notifikasi yang sudah ada untuk hari ini
+  // Tentukan rentang hari lokal dalam UTC
+  const startOfDay = fromZonedTime(`${dateStr}T00:00:00`, timeZone);
+  const endOfDay = fromZonedTime(`${dateStr}T23:59:59`, timeZone);
+
+  // Hapus notifikasi yang sudah ada untuk endpoint & lokasi yang sama pada hari ini
   await supabase
     .from('prayer_notifications')
     .delete()
     .eq('endpoint', endpoint)
     .eq('province_slug', provinceSlug)
     .eq('city_slug', citySlug)
-    .gte('scheduled_for', `${todayStr}T00:00:00`)
-    .lt('scheduled_for', `${todayStr}T23:59:59`);
+    .gte('scheduled_for', startOfDay.toISOString())
+    .lt('scheduled_for', endOfDay.toISOString());
 
   const notifications = [];
 
@@ -40,21 +64,14 @@ export async function generateDailyNotifications(
     const matchingType = prayerTypes.find(pt => prayerName.includes(pt));
     if (!matchingType) continue;
 
-    // Buat string tanggal dalam format "YYYY-MM-DDTHH:mm:ss" (waktu lokal WIB)
-    const [hours, minutes] = prayer.time_24h.split(':').map(Number);
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const timeStr = `${year}-${month}-${day}T${prayer.time_24h}:00`;
-
-    // Konversi dari waktu WIB ke UTC
+    // Gabungkan tanggal lokal dengan waktu sholat
+    const timeStr = `${dateStr}T${prayer.time_24h}:00`;
+    // Konversi ke objek Date dalam UTC (waktu lokal diubah ke UTC)
     const prayerDate = fromZonedTime(timeStr, timeZone);
-
-    // Hitung waktu notifikasi (advance minutes sebelumnya)
+    // Hitung waktu notifikasi (mundur advanceMinutes)
     const scheduledFor = new Date(prayerDate.getTime() - advanceMinutes * 60 * 1000);
 
-    // Jika waktu notifikasi sudah lewat, skip
+    // Lewati jika waktu notifikasi sudah lewat
     if (scheduledFor <= now) continue;
 
     notifications.push({

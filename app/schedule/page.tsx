@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { generateDailyNotifications } from '@/lib/prayer-notifications';
+import { 
+  generateDailyNotifications, 
+  parseIndonesianDate
+} from '@/lib/prayer-notifications';
 import { 
   FaMapMarkerAlt, 
   FaBell, 
@@ -374,19 +377,20 @@ export default function SchedulePage() {
       if (notificationSettings.enabled && notificationPermission === 'granted') {
         await subscribeToPushNotifications();
   
-        // === GENERATE NOTIFIKASI HARI INI ===
         if (selectedProvince && selectedCity && schedule) {
           try {
             const registration = await navigator.serviceWorker.ready;
             const subscription = await registration.pushManager.getSubscription();
             if (subscription) {
+              const dateStr = parseIndonesianDate(schedule.city.date_today);
               await generateDailyNotifications(
                 subscription.endpoint,
                 selectedProvince.slug,
                 selectedCity.slug,
                 schedule.today_schedule,
                 notificationSettings.prayerTypes,
-                notificationSettings.advanceMinutes
+                notificationSettings.advanceMinutes,
+                dateStr
               );
               toast.success('Notifikasi untuk hari ini telah dijadwalkan');
             }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { generateDailyNotifications } from '@/lib/prayer-notifications';
+import { generateDailyNotifications, parseIndonesianDate } from '@/lib/prayer-notifications';
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -23,10 +23,10 @@ export async function GET(request: Request) {
 
     for (const sub of subscriptions) {
       try {
-        // Ambil jadwal sholat untuk lokasi ini (gunakan API eksternal atau cache)
+        // Ambil jadwal sholat untuk lokasi ini
         const scheduleUrl = `https://api.devnova.icu/api/islamic/prayer-time?type=schedule&province=${sub.province_slug}&city=${sub.city_slug}`;
         const res = await fetch(scheduleUrl, {
-          headers: { 'Cache-Control': 'no-cache' } // hindari cache
+          headers: { 'Cache-Control': 'no-cache' }
         });
 
         if (!res.ok) {
@@ -35,14 +35,26 @@ export async function GET(request: Request) {
         }
 
         const data = await res.json();
-        if (!data.success || !data.data?.today_schedule) {
+        if (!data.success || !data.data?.today_schedule || !data.data?.city) {
           results.push({ endpoint: sub.endpoint, status: 'failed', error: 'Invalid API response' });
           continue;
         }
 
-        const schedule = data.data.today_schedule; // { prayers: [...] }
-        const prayerTypes = sub.prayer_types || ['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'];
-        const advanceMinutes = sub.advance_minutes || 10;
+        const schedule = data.data.today_schedule;
+        const city = data.data.city;
+
+        // Konversi tanggal Indonesia ke format YYYY-MM-DD
+        const dateStr = parseIndonesianDate(city.date_today);
+
+        // Parse prayer_types jika disimpan sebagai string JSON
+        let prayerTypes = sub.prayer_types;
+        if (typeof prayerTypes === 'string') {
+          try {
+            prayerTypes = JSON.parse(prayerTypes);
+          } catch {
+            prayerTypes = ['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'];
+          }
+        }
 
         await generateDailyNotifications(
           sub.endpoint,
@@ -50,7 +62,8 @@ export async function GET(request: Request) {
           sub.city_slug,
           schedule,
           prayerTypes,
-          advanceMinutes
+          sub.advance_minutes || 10,
+          dateStr
         );
 
         results.push({ endpoint: sub.endpoint, status: 'generated' });
