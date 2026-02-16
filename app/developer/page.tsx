@@ -20,16 +20,13 @@ import {
   FaUsers,
   FaUser,
   FaCoffee,
-  FaCopy,
   FaArrowLeft,
   FaSpotify,
   FaBitcoin,
   FaEthereum,
-  FaCoins,
-  FaMoneyBillWave,
 } from 'react-icons/fa';
 import { FaCodeCommit } from "react-icons/fa6";
-import { SiTypescript, SiNextdotjs, SiTailwindcss, SiReact, SiExpress } from 'react-icons/si';
+import { SiTypescript, SiNextdotjs, SiTailwindcss, SiReact, SiExpress, SiNodedotjs } from 'react-icons/si';
 import { BiCodeAlt } from 'react-icons/bi';
 
 interface RepoData {
@@ -242,12 +239,13 @@ export default function DeveloperPage() {
     return message.substring(0, maxLength) + '...';
   };
 
-  // Skills list
+  // Skills list (added Node.js)
   const skills = [
     { name: 'JavaScript', icon: <FaJs className="text-yellow-500" /> },
     { name: 'TypeScript', icon: <SiTypescript className="text-blue-600" /> },
     { name: 'React', icon: <SiReact className="text-blue-400" /> },
     { name: 'Next.js', icon: <SiNextdotjs className="text-black" /> },
+    { name: 'Node.js', icon: <SiNodedotjs className="text-green-600" /> },
     { name: 'Express', icon: <SiExpress className="text-gray-600" /> },
     { name: 'Python', icon: <FaPython className="text-blue-500" /> },
     { name: 'Tailwind CSS', icon: <SiTailwindcss className="text-cyan-500" /> },
@@ -282,12 +280,10 @@ export default function DeveloperPage() {
     },
   ];
 
-  // Crypto addresses
+  // Crypto addresses (only BTC and ETH)
   const cryptoAddresses = [
-    { name: 'BTC', address: '1Lzfk3fv3iVFW1DLESEcsgqT1vbpo1eSc5', icon: <FaBitcoin className="w-4 h-4 text-orange-500" /> },
-    { name: 'ETH', address: '0x0dED3c0B467093075B096394AA63E13F8298FC93', icon: <FaEthereum className="w-4 h-4 text-blue-500" /> },
-    { name: 'ETC', address: '0xBcfF4D280b096F28F8D580B0b008E16BcfBd64b7', icon: <FaCoins className="w-4 h-4 text-gray-600" /> },
-    { name: 'AUSD', address: '0x0dED3c0B467093075B096394AA63E13F8298FC93', icon: <FaMoneyBillWave className="w-4 h-4 text-green-600" /> },
+    { name: 'BTC', address: '1Lzfk3fv3iVFW1DLESEcsgqT1vbpo1eSc5', icon: <FaBitcoin className="w-5 h-5" />, bgColor: 'bg-orange-500' },
+    { name: 'ETH', address: '0x0dED3c0B467093075B096394AA63E13F8298FC93', icon: <FaEthereum className="w-5 h-5" />, bgColor: 'bg-blue-500' },
   ];
 
   // Skeleton components
@@ -390,38 +386,7 @@ export default function DeveloperPage() {
                 </div>
               </div>
 
-              {/* Donation buttons - only icons with aria-label */}
-              <div className="mt-6 flex flex-wrap gap-3">
-                <a
-                  href="https://saweria.co/thisssskeyyyy"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Donate via Saweria"
-                  className="inline-flex items-center justify-center p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-sm"
-                >
-                  <FaHeart className="w-5 h-5" />
-                </a>
-                <a
-                  href="https://ko-fi.com/devnova_id"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Support on Ko-fi"
-                  className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shadow-sm"
-                >
-                  <FaCoffee className="w-5 h-5" />
-                </a>
-                <a
-                  href={repoData?.html_url || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="GitHub Repository"
-                  className="inline-flex items-center justify-center p-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition shadow-sm"
-                >
-                  <FaGithub className="w-5 h-5" />
-                </a>
-              </div>
-
-              {/* Social links */}
+              {/* Connect Section */}
               <div className="mt-6">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Connect</h2>
                 <div className="flex flex-wrap gap-3">
@@ -441,26 +406,58 @@ export default function DeveloperPage() {
                 </div>
               </div>
 
-              {/* Crypto Donations */}
+              {/* Donate Section - Icons only with aria-label, including BTC and ETH */}
               <div className="mt-6">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">Crypto Donations</h2>
-                <div className="space-y-2">
-                  {cryptoAddresses.map((crypto) => (
-                    <div key={crypto.name} className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded-lg">
-                      <span className="flex-shrink-0">{crypto.icon}</span>
-                      <span className="font-medium text-gray-700">{crypto.name}:</span>
-                      <code className="text-xs bg-gray-200 px-2 py-1 rounded flex-1 truncate" title={crypto.address}>
-                        {crypto.address}
-                      </code>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(crypto.address)}
-                        className="text-emerald-600 hover:text-emerald-700"
-                        aria-label={`Copy ${crypto.name} address`}
-                      >
-                        <FaCopy className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">Donate</h2>
+                <div className="flex flex-wrap gap-3">
+                  {/* Saweria */}
+                  <a
+                    href="https://saweria.co/thisssskeyyyy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Donate via Saweria"
+                    className="inline-flex items-center justify-center p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-sm"
+                  >
+                    <FaHeart className="w-5 h-5" />
+                  </a>
+                  {/* Ko-fi */}
+                  <a
+                    href="https://ko-fi.com/devnova_id"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Support on Ko-fi"
+                    className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shadow-sm"
+                  >
+                    <FaCoffee className="w-5 h-5" />
+                  </a>
+                  {/* GitHub */}
+                  <a
+                    href={repoData?.html_url || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="GitHub Repository"
+                    className="inline-flex items-center justify-center p-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition shadow-sm"
+                  >
+                    <FaGithub className="w-5 h-5" />
+                  </a>
+
+                  {/* BTC */}
+                  <button
+                    onClick={() => navigator.clipboard.writeText('1Lzfk3fv3iVFW1DLESEcsgqT1vbpo1eSc5')}
+                    aria-label="Copy BTC address"
+                    className="inline-flex items-center justify-center p-2 bg-orange-500 text-white rounded-lg hover:opacity-90 transition shadow-sm"
+                  >
+                    <FaBitcoin className="w-5 h-5" />
+                  </button>
+
+                  {/* ETH */}
+                  <button
+                    onClick={() => navigator.clipboard.writeText('0x0dED3c0B467093075B096394AA63E13F8298FC93')}
+                    aria-label="Copy ETH address"
+                    className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg hover:opacity-90 transition shadow-sm"
+                  >
+                    <FaEthereum className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
             </div>
