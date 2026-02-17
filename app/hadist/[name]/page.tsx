@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaHashtag, FaShareAlt, FaCloud } from 'react-icons/fa';
 import { motion } from 'framer-motion';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
 import { db } from '@/lib/db';
 
@@ -72,7 +72,6 @@ export default function HadistDetailPage() {
       const cachedBook = await db.getHadithBook(bookId);
       const cachedHadiths = await db.getHadiths(bookId, page, itemsPerPage);
       
-      // Jika ada cache untuk halaman ini, tampilkan dulu
       if (cachedHadiths.length > 0 && cachedBook) {
         setBookDetail({
           name: cachedBook.name,
@@ -87,7 +86,6 @@ export default function HadistDetailPage() {
         setOfflineMode(!isOnline);
       }
       
-      // Jika online, fetch data terbaru
       if (isOnline) {
         const start = (page - 1) * itemsPerPage + 1;
         const end = page * itemsPerPage;
@@ -105,14 +103,12 @@ export default function HadistDetailPage() {
           setBookDetail(newDetail);
           setOfflineMode(false);
           
-          // Simpan ke database
           await db.saveHadithBook(bookId, data.data.name, data.data.available);
           await db.saveHadiths(bookId, data.data.hadiths);
         } else {
           throw new Error('Gagal memuat data');
         }
       } else if (cachedHadiths.length === 0) {
-        // Jika offline dan tidak ada cache
         setError('Tidak ada data offline untuk halaman ini');
       }
     } catch (err) {
@@ -131,29 +127,35 @@ export default function HadistDetailPage() {
     }
   };
 
+  // ================= MENGGUNAKAN HTML-TO-IMAGE =================
   const handleShareHadith = async (hadith: Hadith) => {
     const elementId = `hadith-${bookId}-${hadith.number}`;
     const element = document.getElementById(elementId);
-    if (!element) return;
+    if (!element) {
+      toast.error('Elemen hadis tidak ditemukan');
+      return;
+    }
 
     setSharingId(hadith.number);
 
     try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
+      // Konversi elemen ke PNG (data URL)
+      const dataUrl = await toPng(element, {
+        quality: 1,
+        pixelRatio: 1.5, // setara dengan scale
         backgroundColor: '#ffffff',
-        allowTaint: false,
-        useCORS: true,
-        logging: false,
+        skipFonts: false, // pastikan font ikut terbaca
+        cacheBust: true,
       });
 
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((blob) => resolve(blob!), 'image/png', 1);
-      });
+      // Ubah data URL menjadi Blob
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
 
       const file = new File([blob], `hadis_${bookId}_${hadith.number}.png`, { type: 'image/png' });
       const shareText = `Hadis ${bookDetail?.name} no. ${hadith.number}\n\n${hadith.arab}\n\n${hadith.id}\n\n— via quranku`;
 
+      // Cek dukungan share file
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
@@ -161,27 +163,38 @@ export default function HadistDetailPage() {
           text: shareText,
         });
         toast.success('Hadis berhasil dibagikan');
-      } else if (navigator.share) {
+      } 
+      else if (navigator.share) {
         await navigator.share({
           title: `Hadis ${bookDetail?.name} - ${hadith.number}`,
           text: shareText,
         });
         toast.success('Hadis berhasil dibagikan');
-      } else {
+      } 
+      else {
+        // Fallback: download gambar + salin teks
         const link = document.createElement('a');
         link.download = `hadis_${bookId}_${hadith.number}.png`;
-        link.href = canvas.toDataURL('image/png');
+        link.href = dataUrl;
         link.click();
-        await navigator.clipboard.writeText(shareText);
-        toast.success('Gambar diunduh & teks disalin ke clipboard');
+
+        try {
+          await navigator.clipboard.writeText(shareText);
+          toast.success('Gambar diunduh & teks disalin ke clipboard');
+        } catch (clipError) {
+          console.warn('Gagal menyalin teks:', clipError);
+          toast.success('Gambar diunduh (gagal menyalin teks)');
+        }
       }
     } catch (error) {
       console.error('Gagal membagikan hadis:', error);
-      toast.error('Gagal membagikan hadis');
+      const errorMessage = error instanceof Error ? error.message : 'Terjadi kesalahan tidak dikenal';
+      toast.error(`Gagal membagikan hadis: ${errorMessage}`);
     } finally {
       setSharingId(null);
     }
   };
+  // ================= AKHIR PERBAIKAN =================
 
   if (loading && !bookDetail) {
     return (
