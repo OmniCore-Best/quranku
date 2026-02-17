@@ -70,25 +70,49 @@ export interface Tafsir {
   updatedAt: Date;
 }
 
+// === HADIS ===
+export interface HadithBook {
+  id?: number;
+  bookId: string;        
+  name: string;
+  available: number;     
+  updatedAt: Date;
+}
+
+export interface Hadith {
+  id?: number;
+  bookId: string;
+  number: number;
+  arab: string;
+  translation: string;   
+  updatedAt: Date;
+}
+
 class QuranDatabase extends Dexie {
   quranList!: Dexie.Table<QuranList, number>;
   surahDetail!: Dexie.Table<SurahDetail, number>;
   readingProgress!: Dexie.Table<ReadingProgress, number>;
   lastRead!: Dexie.Table<LastRead, number>;
   tafsir!: Dexie.Table<Tafsir, number>;
+  hadithBooks!: Dexie.Table<HadithBook, number>;
+  hadiths!: Dexie.Table<Hadith, number>;
 
   constructor() {
     super('QuranDatabase');
     
-    this.version(14).stores({
+    // Upgrade ke versi 15 untuk menambahkan tabel hadis
+    this.version(15).stores({
       quranList: '++id, nomor, updatedAt',
       surahDetail: '++id, nomor, updatedAt',
       readingProgress: '++id, surahId, timestamp, [surahId+timestamp]',
       lastRead: '++id, surahId, timestamp',
-      tafsir: '++id, surahId, ayat, [surahId+ayat], updatedAt'
+      tafsir: '++id, surahId, ayat, [surahId+ayat], updatedAt',
+      hadithBooks: '++id, bookId, updatedAt',
+      hadiths: '++id, bookId, number, [bookId+number], updatedAt'
     });
   }
 
+  // Membersihkan data lama (lebih dari 3 hari)
   async clearOldData() {
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
@@ -107,8 +131,20 @@ class QuranDatabase extends Dexie {
       .where('updatedAt')
       .below(threeDaysAgo)
       .delete();
+
+    // Hapus data hadis lama
+    await this.hadithBooks
+      .where('updatedAt')
+      .below(threeDaysAgo)
+      .delete();
+
+    await this.hadiths
+      .where('updatedAt')
+      .below(threeDaysAgo)
+      .delete();
   }
 
+  // ===== Progress Membaca Al-Qur'an =====
   async saveReadingProgress(surahId: number, surahName: string, ayatNumber: number) {
     await this.readingProgress.add({
       surahId,
@@ -160,6 +196,7 @@ class QuranDatabase extends Dexie {
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }
 
+  // ===== Tafsir =====
   async saveTafsir(surahId: number, ayat: number, teks: string) {
     await this.tafsir.put({
       surahId,
@@ -169,7 +206,6 @@ class QuranDatabase extends Dexie {
     });
   }
 
-  // FIXED: Return type yang lebih spesifik
   async getTafsir(surahId: number, ayat?: number): Promise<Tafsir[]> {
     if (ayat !== undefined) {
       const tafsir = await this.tafsir
@@ -185,7 +221,6 @@ class QuranDatabase extends Dexie {
     }
   }
 
-  // Method baru untuk mengambil tafsir tunggal
   async getSingleTafsir(surahId: number, ayat: number): Promise<Tafsir | undefined> {
     return await this.tafsir
       .where('[surahId+ayat]')
@@ -208,6 +243,45 @@ class QuranDatabase extends Dexie {
   async isAllDataDownloaded() {
     const surahCount = await this.quranList.count();
     return surahCount >= 114;
+  }
+
+  // ===== HADIS =====
+  async saveHadithBook(bookId: string, name: string, available: number) {
+    await this.hadithBooks.put({
+      bookId,
+      name,
+      available,
+      updatedAt: new Date()
+    });
+  }
+
+  async getHadithBook(bookId: string): Promise<HadithBook | undefined> {
+    return await this.hadithBooks.where('bookId').equals(bookId).first();
+  }
+
+  async saveHadiths(bookId: string, hadiths: { number: number; arab: string; id: string }[]) {
+    const toSave = hadiths.map(h => ({
+      bookId,
+      number: h.number,
+      arab: h.arab,
+      translation: h.id,
+      updatedAt: new Date()
+    }));
+    // bulkPut akan mengupdate jika sudah ada
+    await this.hadiths.bulkPut(toSave);
+  }
+
+  async getHadiths(bookId: string, page: number, itemsPerPage: number): Promise<Hadith[]> {
+    const start = (page - 1) * itemsPerPage + 1;
+    const end = page * itemsPerPage;
+    return await this.hadiths
+      .where('[bookId+number]')
+      .between([bookId, start], [bookId, end])
+      .toArray();
+  }
+
+  async getAllHadithBooks(): Promise<HadithBook[]> {
+    return await this.hadithBooks.toArray();
   }
 }
 

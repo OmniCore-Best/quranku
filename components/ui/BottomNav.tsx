@@ -16,7 +16,8 @@ import {
   FaCog,
   FaPlus,
   FaTimes,
-  FaCode
+  FaCode,
+  FaBook
 } from 'react-icons/fa';
 
 interface MenuItem {
@@ -53,7 +54,13 @@ const BottomNav = () => {
       comingSoon: false, 
       href: '/developer' 
     },
-    { id: 2, name: 'Sholat', icon: <FaCalendarAlt />, comingSoon: true },
+    { 
+      id: 2, 
+      name: 'Hadist',           
+      icon: <FaBook />,           
+      comingSoon: false,      
+      href: '/hadist'         
+    },
     { id: 3, name: 'Asmaul Husna', icon: <FaBookmark />, comingSoon: true },
     { id: 4, name: 'Sejarah', icon: <FaHistory />, comingSoon: true },
     { id: 5, name: 'Cari', icon: <FaSearch />, comingSoon: true },
