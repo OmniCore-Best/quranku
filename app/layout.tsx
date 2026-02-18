@@ -9,36 +9,85 @@ import InstallPrompt from "@/components/ui/InstallPrompt";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: "swap", // optimalisasi performa font
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://quranku.devnova.icu";
+
 export const metadata: Metadata = {
-  title: "quranku - Aplikasi Al-Quran, Doa, Tajwid, dan Galeri Islami",
-  description: "Aplikasi lengkap untuk membaca Al-Quran, belajar tajwid, doa harian, dan galeri islami",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "quranku - Aplikasi Al-Quran, Doa, Tajwid, dan Galeri Islami",
+    template: "%s | quranku", // template untuk halaman lain
+  },
+  description:
+    "Aplikasi lengkap untuk membaca Al-Quran, belajar tajwid, doa harian, dan galeri islami. Tersedia offline dan gratis.",
+  keywords: [
+    "Al-Quran",
+    "tajwid",
+    "doa",
+    "hadist",
+    "islami",
+    "quranku",
+    "baca quran",
+    "jadwal sholat",
+  ],
+  authors: [{ name: "devnova-id", url: "https://github.com/devnovaa-id" }],
+  creator: "devnova-id",
+  publisher: "devnova-id",
+  formatDetection: {
+    telephone: false,
+  },
   manifest: "/manifest.json",
-  applicationName: "quranku",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "quranku",
   },
-  formatDetection: {
-    telephone: false,
-  },
   openGraph: {
     type: "website",
-    title: "quranku",
-    description: "Aplikasi Al-Quran, Doa, Tajwid, dan Galeri Islami",
+    locale: "id_ID",
+    url: siteUrl,
+    siteName: "quranku",
+    title: "quranku - Aplikasi Al-Quran, Doa, Tajwid, dan Galeri Islami",
+    description:
+      "Aplikasi lengkap untuk membaca Al-Quran, belajar tajwid, doa harian, dan galeri islami",
+    images: [
+      {
+        url: `${siteUrl}/icons/icon-512x512.png`,
+        width: 512,
+        height: 512,
+        alt: "quranku - Aplikasi Islami",
+      },
+    ],
   },
   twitter: {
-    card: "summary",
-    title: "quranku",
-    description: "Aplikasi Al-Quran, Doa, Tajwid, dan Galeri Islami",
+    card: "summary_large_image",
+    site: "@quranku",
+    creator: "@quranku",
+    title: "quranku - Aplikasi Al-Quran, Doa, Tajwid, dan Galeri Islami",
+    description:
+      "Aplikasi lengkap untuk membaca Al-Quran, belajar tajwid, doa harian, dan galeri islami",
+    images: `${siteUrl}/icons/icon-512x512.png`,
   },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  category: "education",
 };
 
 export const viewport: Viewport = {
@@ -57,50 +106,23 @@ export default function RootLayout({
   return (
     <html lang="id">
       <head>
-        <link rel="manifest" href="/manifest.json" />
-        <meta name="application-name" content="quranku" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="quranku" />
-        <meta name="description" content="Aplikasi Al-Quran, Doa, Tajwid, dan Galeri Islami" />
-        <meta name="format-detection" content="telephone=no" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="msapplication-TileColor" content="#10b981" />
-        <meta name="msapplication-tap-highlight" content="no" />
-        <meta name="theme-color" content="#10b981" />
-        
-        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192x192.png" />
-        <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-152x152.png" />
-        
-        <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
-        <link rel="mask-icon" href="/icons/apple-touch-icon.png" color="#10b981" />
-        <link rel="shortcut icon" href="/favicon.ico" />
-        
-        <meta name="twitter:card" content="summary" />
-        <meta name="twitter:url" content="https://quranku.devnova.icu" />
-        <meta name="twitter:title" content="quranku" />
-        <meta name="twitter:description" content="Aplikasi Al-Quran, Doa, Tajwid, dan Galeri Islami" />
-        <meta name="twitter:image" content="https://quranku.devnova.icu/icons/icon-192x192.png" />
-        <meta name="twitter:creator" content="@quranku" />
-        <meta property="og:type" content="website" />
-        <meta property="og:title" content="quranku" />
-        <meta property="og:description" content="Aplikasi Al-Quran, Doa, Tajwid, dan Galeri Islami" />
-        <meta property="og:site_name" content="quranku" />
-        <meta property="og:url" content="https://quranku.devnova.icu" />
-        <meta property="og:image" content="https://quranku.devnova.icu/icons/icon-512x512.png" />
+        {/* Preconnect untuk domain eksternal – meningkatkan performa loading */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link rel="preconnect" href="https://api.devnova.icu" />
+        <link rel="dns-prefetch" href="https://api.devnova.icu" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50`}
       >
-        <main className="min-h-screen pb-20">
-          {children}
-        </main>
+        <main className="min-h-screen pb-20">{children}</main>
         <BottomNav />
         <ServiceWorkerRegistration />
-        <InstallPrompt /> 
+        <InstallPrompt />
         <Toaster position="top-center" richColors />
       </body>
     </html>

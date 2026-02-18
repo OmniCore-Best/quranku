@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { AnimatePresence } from 'framer-motion';
+import { PiHandsPrayingBold, PiHandsPraying } from 'react-icons/pi';
 
 // Heroicons – Solid
 import { BookOpenIcon as BookOpenSolid } from '@heroicons/react/24/solid';
@@ -67,8 +68,8 @@ const BottomNav = () => {
     {
       href: '/prayer',
       label: 'Doa',
-      iconSolid: <HandRaisedSolid className="w-5 h-5" />,
-      iconOutline: <HandRaisedOutline className="w-5 h-5" />
+      iconSolid: <PiHandsPrayingBold className="w-5 h-5" />,
+      iconOutline: <PiHandsPraying className="w-5 h-5" />
     }
   ];
 
