@@ -9,10 +9,15 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@kmaslesa/tajweed": "^1.0.0",
     "@supabase/supabase-js": "^2.90.1",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "dexie": "^4.2.1",
     "framer-motion": "^12.26.0",
+    "html-to-image": "^1.11.13",
+    "html2canvas": "^1.4.1",
     "next": "^16.1.1",
     "node-addon-api": "^8.5.0",
     "react": "19.2.0",
