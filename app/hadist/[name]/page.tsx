@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaHashtag, FaShareAlt, FaCloud } from 'react-icons/fa';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { FaArrowLeft, FaHashtag, FaShareAlt, FaCloud } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
@@ -25,18 +25,23 @@ interface BookDetail {
 export default function HadistDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const bookId = params.name as string;
 
   const [bookDetail, setBookDetail] = useState<BookDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [sharingId, setSharingId] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [offlineMode, setOfflineMode] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [allHadiths, setAllHadiths] = useState<Hadith[]>([]);
+  
   const itemsPerPage = 20;
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const lastElementRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -54,64 +59,72 @@ export default function HadistDetailPage() {
   }, []);
 
   useEffect(() => {
-    const pageParam = searchParams.get('page');
-    setPage(pageParam ? parseInt(pageParam) : 1);
-  }, [searchParams]);
-
-  useEffect(() => {
     if (bookId) {
-      fetchHadiths();
+      fetchInitialData();
     }
-  }, [bookId, page, isOnline]);
+  }, [bookId]);
 
-  const fetchHadiths = async () => {
+  // Setup intersection observer untuk infinite scroll
+  useEffect(() => {
+    if (loading) return;
+
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && isOnline) {
+          loadMoreHadiths();
+        }
+      },
+      { threshold: 0.5, rootMargin: '100px' }
+    );
+
+    if (lastElementRef.current) {
+      observerRef.current.observe(lastElementRef.current);
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [loading, hasMore, loadingMore, isOnline, allHadiths]);
+
+  const fetchInitialData = async () => {
     try {
       setLoading(true);
       setError(null);
+      setPage(1);
+      setAllHadiths([]);
       
-      // Coba ambil dari cache terlebih dahulu
+      // Ambil dari cache untuk halaman pertama
       const cachedBook = await db.getHadithBook(bookId);
-      const cachedHadiths = await db.getHadiths(bookId, page, itemsPerPage);
+      const cachedHadiths = await db.getHadiths(bookId, 1, itemsPerPage);
       
       if (cachedHadiths.length > 0 && cachedBook) {
+        const initialHadiths = cachedHadiths.map(h => ({
+          number: h.number,
+          arab: h.arab,
+          id: h.translation
+        }));
+        
         setBookDetail({
           name: cachedBook.name,
           id: bookId,
           available: cachedBook.available,
-          hadiths: cachedHadiths.map(h => ({
-            number: h.number,
-            arab: h.arab,
-            id: h.translation
-          }))
+          hadiths: initialHadiths
         });
+        setAllHadiths(initialHadiths);
         setOfflineMode(!isOnline);
+        setHasMore(cachedBook.available > itemsPerPage);
       }
       
       if (isOnline) {
-        const start = (page - 1) * itemsPerPage + 1;
-        const end = page * itemsPerPage;
-        const res = await fetch(`https://api.hadith.gading.dev/books/${bookId}?range=${start}-${end}`);
-        const data = await res.json();
-        
-        if (data.code === 200) {
-          const newDetail: BookDetail = {
-            name: data.data.name,
-            id: data.data.id,
-            available: data.data.available,
-            requested: data.data.requested,
-            hadiths: data.data.hadiths
-          };
-          setBookDetail(newDetail);
-          setOfflineMode(false);
-          
-          await db.saveHadithBook(bookId, data.data.name, data.data.available);
-          // Simpan dengan rentang agar data lama dihapus
-          await db.saveHadiths(bookId, data.data.hadiths, start, end);
-        } else {
-          throw new Error('Gagal memuat data');
-        }
+        await loadMoreHadiths(1, true);
       } else if (cachedHadiths.length === 0) {
-        setError('Tidak ada data offline untuk halaman ini');
+        setError('Tidak ada data offline. Silakan online terlebih dahulu.');
       }
     } catch (err) {
       console.error(err);
@@ -121,11 +134,55 @@ export default function HadistDetailPage() {
     }
   };
 
-  const totalPages = bookDetail ? Math.ceil(bookDetail.available / itemsPerPage) : 0;
+  const loadMoreHadiths = async (targetPage = page + 1, isInitial = false) => {
+    if (!isOnline) {
+      toast.error('Tidak dapat memuat lebih banyak dalam mode offline');
+      return;
+    }
 
-  const goToPage = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      router.push(`/hadist/${bookId}?page=${newPage}`);
+    try {
+      setLoadingMore(true);
+      
+      const start = (targetPage - 1) * itemsPerPage + 1;
+      const end = targetPage * itemsPerPage;
+      
+      const res = await fetch(`https://api.hadith.gading.dev/books/${bookId}?range=${start}-${end}`);
+      const data = await res.json();
+      
+      if (data.code === 200) {
+        const newHadiths = data.data.hadiths;
+        
+        if (!bookDetail) {
+          // Inisialisasi book detail jika belum ada
+          setBookDetail({
+            name: data.data.name,
+            id: data.data.id,
+            available: data.data.available,
+            requested: data.data.requested,
+            hadiths: newHadiths
+          });
+        }
+        
+        // Update state
+        setAllHadiths(prev => isInitial ? newHadiths : [...prev, ...newHadiths]);
+        setPage(targetPage);
+        
+        // Cek apakah masih ada halaman berikutnya
+        const nextStart = targetPage * itemsPerPage + 1;
+        setHasMore(nextStart <= data.data.available);
+        
+        // Simpan ke cache
+        await db.saveHadithBook(bookId, data.data.name, data.data.available);
+        await db.saveHadiths(bookId, newHadiths, start, end);
+        setOfflineMode(false);
+      } else {
+        throw new Error('Gagal memuat data');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal memuat data tambahan');
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -270,17 +327,28 @@ export default function HadistDetailPage() {
           </div>
         </div>
 
-        {/* Daftar Hadis */}
+        {/* Info offline mode */}
+        {!isOnline && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-sm text-amber-800 flex items-center gap-2">
+              <FaCloud className="w-4 h-4" />
+              Anda sedang offline. Menampilkan data yang tersimpan.
+            </p>
+          </div>
+        )}
+
+        {/* Daftar Hadis dengan Infinite Scroll */}
         <motion.div
           className="space-y-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ staggerChildren: 0.1 }}
         >
-          {bookDetail.hadiths.map((hadith) => (
+          {allHadiths.map((hadith, index) => (
             <motion.div
               key={hadith.number}
               id={`hadith-${bookId}-${hadith.number}`}
+              ref={index === allHadiths.length - 1 ? lastElementRef : null}
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ type: 'spring' }}
@@ -323,25 +391,28 @@ export default function HadistDetailPage() {
           ))}
         </motion.div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-8">
+        {/* Loading indicator */}
+        {loadingMore && (
+          <div className="flex justify-center py-4">
+            <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div>
+          </div>
+        )}
+
+        {/* No more data indicator */}
+        {!hasMore && allHadiths.length > 0 && (
+          <div className="text-center py-4 text-gray-500 text-sm">
+            ─── Semua hadis telah dimuat ───
+          </div>
+        )}
+
+        {/* Manual load more button (jika observer gagal) */}
+        {hasMore && isOnline && !loadingMore && (
+          <div className="flex justify-center py-4">
             <button
-              onClick={() => goToPage(page - 1)}
-              disabled={page === 1}
-              className="p-2 rounded-lg border border-gray-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => loadMoreHadiths()}
+              className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm hover:bg-emerald-200 transition"
             >
-              <FaChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="px-3 py-1 text-sm text-gray-700">
-              Halaman {page} dari {totalPages}
-            </span>
-            <button
-              onClick={() => goToPage(page + 1)}
-              disabled={page === totalPages}
-              className="p-2 rounded-lg border border-gray-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <FaChevronRight className="w-4 h-4" />
+              Muat lebih banyak
             </button>
           </div>
         )}

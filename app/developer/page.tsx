@@ -350,8 +350,10 @@ export default function DeveloperPage() {
                   alt="Developer Profile"
                   width={112}
                   height={112}
-                  className="object-cover w-full h-full"
                   priority
+                  draggable={false}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className="object-cover w-full h-full protected-img"
                 />
               </div>
             </div>
@@ -698,6 +700,13 @@ export default function DeveloperPage() {
           .xs\\:inline {
             display: inline;
           }
+        }
+      
+        .protected-img {
+          -webkit-user-drag: none;
+          -webkit-touch-callout: none;
+          user-select: none;
+          pointer-events: none;
         }
       `}</style>
     </div>
