@@ -259,7 +259,26 @@ class QuranDatabase extends Dexie {
     return await this.hadithBooks.where('bookId').equals(bookId).first();
   }
 
-  async saveHadiths(bookId: string, hadiths: { number: number; arab: string; id: string }[]) {
+  // ===== PERBAIKAN: Simpan hadis dengan menghapus data lama dalam rentang yang sama =====
+  async saveHadiths(bookId: string, hadiths: { number: number; arab: string; id: string }[], start?: number, end?: number) {
+    // Hapus data lama dalam rentang yang sama (jika ada)
+    if (start !== undefined && end !== undefined) {
+      await this.hadiths
+        .where('[bookId+number]')
+        .between([bookId, start], [bookId, end])
+        .delete();
+    } else {
+      // Jika tidak ada rentang, hapus berdasarkan nomor yang ada (fallback)
+      const numbers = hadiths.map(h => h.number);
+      if (numbers.length > 0) {
+        const min = Math.min(...numbers);
+        const max = Math.max(...numbers);
+        await this.hadiths
+          .where('[bookId+number]')
+          .between([bookId, min], [bookId, max])
+          .delete();
+      }
+    }
     const toSave = hadiths.map(h => ({
       bookId,
       number: h.number,
@@ -267,7 +286,6 @@ class QuranDatabase extends Dexie {
       translation: h.id,
       updatedAt: new Date()
     }));
-    // bulkPut akan mengupdate jika sudah ada
     await this.hadiths.bulkPut(toSave);
   }
 

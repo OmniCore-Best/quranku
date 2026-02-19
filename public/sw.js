@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v18'; 
+const CACHE_VERSION = 'v19'; 
 
 const STATIC_CACHE = `quranku-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `quranku-dynamic-${CACHE_VERSION}`;

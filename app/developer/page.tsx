@@ -256,6 +256,7 @@ export default function DeveloperPage() {
     { name: 'equran.id', url: 'https://equran.id/' },
     { name: 'jadwalsholathariini.id', url: 'https://jadwalsholathariini.id/' },
     { name: 'quran.tazkia.ac.id', url: 'https://quran.tazkia.ac.id/' },
+    { name: 'api.hadith.gading.dev', url: 'https://api.hadith.gading.dev' },
   ];
 
   // Social media links

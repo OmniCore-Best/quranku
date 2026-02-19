@@ -35,6 +35,7 @@ export default function HadistDetailPage() {
   const [sharingId, setSharingId] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [offlineMode, setOfflineMode] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const itemsPerPage = 20;
 
   useEffect(() => {
@@ -104,7 +105,8 @@ export default function HadistDetailPage() {
           setOfflineMode(false);
           
           await db.saveHadithBook(bookId, data.data.name, data.data.available);
-          await db.saveHadiths(bookId, data.data.hadiths);
+          // Simpan dengan rentang agar data lama dihapus
+          await db.saveHadiths(bookId, data.data.hadiths, start, end);
         } else {
           throw new Error('Gagal memuat data');
         }
@@ -127,7 +129,6 @@ export default function HadistDetailPage() {
     }
   };
 
-  // ================= MENGGUNAKAN HTML-TO-IMAGE =================
   const handleShareHadith = async (hadith: Hadith) => {
     const elementId = `hadith-${bookId}-${hadith.number}`;
     const element = document.getElementById(elementId);
@@ -139,23 +140,20 @@ export default function HadistDetailPage() {
     setSharingId(hadith.number);
 
     try {
-      // Konversi elemen ke PNG (data URL)
       const dataUrl = await toPng(element, {
         quality: 1,
-        pixelRatio: 1.5, // setara dengan scale
+        pixelRatio: 1.5,
         backgroundColor: '#ffffff',
-        skipFonts: false, // pastikan font ikut terbaca
+        skipFonts: false,
         cacheBust: true,
       });
 
-      // Ubah data URL menjadi Blob
       const response = await fetch(dataUrl);
       const blob = await response.blob();
 
       const file = new File([blob], `hadis_${bookId}_${hadith.number}.png`, { type: 'image/png' });
       const shareText = `Hadis ${bookDetail?.name} no. ${hadith.number}\n\n${hadith.arab}\n\n${hadith.id}\n\n— via quranku`;
 
-      // Cek dukungan share file
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
@@ -172,7 +170,6 @@ export default function HadistDetailPage() {
         toast.success('Hadis berhasil dibagikan');
       } 
       else {
-        // Fallback: download gambar + salin teks
         const link = document.createElement('a');
         link.download = `hadis_${bookId}_${hadith.number}.png`;
         link.href = dataUrl;
@@ -194,7 +191,18 @@ export default function HadistDetailPage() {
       setSharingId(null);
     }
   };
-  // ================= AKHIR PERBAIKAN =================
+
+  const toggleExpand = (number: number) => {
+    setExpandedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(number)) {
+        newSet.delete(number);
+      } else {
+        newSet.add(number);
+      }
+      return newSet;
+    });
+  };
 
   if (loading && !bookDetail) {
     return (
@@ -276,12 +284,12 @@ export default function HadistDetailPage() {
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ type: 'spring' }}
-              className="bg-white rounded-xl border border-gray-200 p-5 hover:border-emerald-300 transition-all relative group"
+              className="bg-white rounded-xl border border-gray-200 p-5 hover:border-emerald-300 transition-all relative"
             >
               <button
                 onClick={() => handleShareHadith(hadith)}
                 disabled={sharingId === hadith.number}
-                className="absolute top-3 right-3 p-2 rounded-lg bg-white/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-emerald-50 disabled:opacity-50"
+                className="absolute top-3 right-3 p-2 rounded-lg bg-white/80 backdrop-blur-sm opacity-100 hover:bg-emerald-50 disabled:opacity-50 transition-colors z-10"
                 title="Bagikan hadis"
               >
                 {sharingId === hadith.number ? (
@@ -301,7 +309,15 @@ export default function HadistDetailPage() {
                 <p className="font-arabic text-xl leading-loose text-gray-900">{hadith.arab}</p>
               </div>
               <div className="border-t border-gray-100 pt-3">
-                <p className="text-gray-700 text-sm leading-relaxed line-clamp-3">{hadith.id}</p>
+                <p className={`text-gray-700 text-sm leading-relaxed whitespace-pre-wrap ${expandedIds.has(hadith.number) ? '' : 'line-clamp-3'}`}>
+                  {hadith.id}
+                </p>
+                <button
+                  onClick={() => toggleExpand(hadith.number)}
+                  className="text-emerald-600 text-xs mt-1 hover:underline focus:outline-none"
+                >
+                  {expandedIds.has(hadith.number) ? 'Sembunyikan' : 'Baca selengkapnya'}
+                </button>
               </div>
             </motion.div>
           ))}
