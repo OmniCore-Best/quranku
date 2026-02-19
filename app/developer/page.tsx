@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -78,34 +78,6 @@ export default function DeveloperPage() {
   const [commits, setCommits] = useState<Commit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // State untuk video
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [isMuted, setIsMuted] = useState(true);
-  const [userInteracted, setUserInteracted] = useState(false);
-
-  useEffect(() => {
-    // Listener untuk interaksi pertama pengguna
-    const handleUserInteraction = () => {
-      if (!userInteracted) {
-        setUserInteracted(true);
-        setIsMuted(false); // unmute video
-      }
-    };
-
-    // Pasang listener dengan opsi sekali jalan
-    window.addEventListener('scroll', handleUserInteraction, { once: true });
-    window.addEventListener('click', handleUserInteraction, { once: true });
-    window.addEventListener('touchstart', handleUserInteraction, { once: true });
-    window.addEventListener('keydown', handleUserInteraction, { once: true });
-
-    return () => {
-      window.removeEventListener('scroll', handleUserInteraction);
-      window.removeEventListener('click', handleUserInteraction);
-      window.removeEventListener('touchstart', handleUserInteraction);
-      window.removeEventListener('keydown', handleUserInteraction);
-    };
-  }, [userInteracted]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -312,6 +284,12 @@ export default function DeveloperPage() {
     },
   ];
 
+  // Crypto addresses (only BTC and ETH)
+  const cryptoAddresses = [
+    { name: 'BTC', address: '1Lzfk3fv3iVFW1DLESEcsgqT1vbpo1eSc5', icon: <FaBitcoin className="w-5 h-5" />, bgColor: 'bg-orange-500' },
+    { name: 'ETH', address: '0x0dED3c0B467093075B096394AA63E13F8298FC93', icon: <FaEthereum className="w-5 h-5" />, bgColor: 'bg-blue-500' },
+  ];
+
   // Skeleton components
   const SkeletonRepoStats = () => (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-pulse">
@@ -366,24 +344,7 @@ export default function DeveloperPage() {
 
         {/* Profile Card */}
         <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 overflow-hidden mb-6 transition-opacity duration-500">
-          {/* Video Cover */}
-          <div className="relative h-32 overflow-hidden">
-            <video
-              ref={videoRef}
-              autoPlay
-              loop
-              playsInline
-              controls={false}
-              muted={isMuted}  // muted diatur berdasarkan state
-              className="absolute inset-0 w-full h-full object-cover"
-            >
-              <source src="/asset/dev/sampul.mp4" type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-            {/* Overlay tipis agar konten di atasnya tetap terbaca */}
-            <div className="absolute inset-0 bg-black/20"></div>
-          </div>
-
+          <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-32"></div>
           <div className="relative px-6 pb-6">
             <div className="absolute -top-16 left-6">
               <div className="w-28 h-28 rounded-full border-4 border-white shadow-lg overflow-hidden bg-white">
@@ -431,7 +392,7 @@ export default function DeveloperPage() {
                 </div>
               </div>
 
-              {/* Connect Section (dengan GitHub) */}
+              {/* Connect Section (with GitHub added) */}
               <div className="mt-6">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Connect</h2>
                 <div className="flex flex-wrap gap-3">
@@ -448,7 +409,7 @@ export default function DeveloperPage() {
                       <span className="hidden xs:inline">{social.name}</span>
                     </a>
                   ))}
-                  {/* GitHub */}
+                  {/* GitHub moved here */}
                   <a
                     href={repoData?.html_url || '#'}
                     target="_blank"
@@ -461,7 +422,7 @@ export default function DeveloperPage() {
                 </div>
               </div>
 
-              {/* Donate Section - Buy me coffee */}
+              {/* Donate Section - Buy me coffee (fixed spelling) */}
               <div className="mt-6">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Buy me coffee</h2>
                 <div className="flex flex-wrap gap-3">
