@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -24,9 +24,10 @@ import {
   FaSpotify,
   FaBitcoin,
   FaEthereum,
+  FaUbuntu,
 } from 'react-icons/fa';
 import { FaCodeCommit } from "react-icons/fa6";
-import { SiTypescript, SiNextdotjs, SiTailwindcss, SiReact, SiExpress, SiNodedotjs } from 'react-icons/si';
+import { SiTypescript, SiNextdotjs, SiTailwindcss, SiReact, SiExpress, SiNodedotjs, SiSupabase } from 'react-icons/si';
 import { BiCodeAlt } from 'react-icons/bi';
 
 interface RepoData {
@@ -77,6 +78,34 @@ export default function DeveloperPage() {
   const [commits, setCommits] = useState<Commit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // State untuk video
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isMuted, setIsMuted] = useState(true);
+  const [userInteracted, setUserInteracted] = useState(false);
+
+  useEffect(() => {
+    // Listener untuk interaksi pertama pengguna
+    const handleUserInteraction = () => {
+      if (!userInteracted) {
+        setUserInteracted(true);
+        setIsMuted(false); // unmute video
+      }
+    };
+
+    // Pasang listener dengan opsi sekali jalan
+    window.addEventListener('scroll', handleUserInteraction, { once: true });
+    window.addEventListener('click', handleUserInteraction, { once: true });
+    window.addEventListener('touchstart', handleUserInteraction, { once: true });
+    window.addEventListener('keydown', handleUserInteraction, { once: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleUserInteraction);
+      window.removeEventListener('click', handleUserInteraction);
+      window.removeEventListener('touchstart', handleUserInteraction);
+      window.removeEventListener('keydown', handleUserInteraction);
+    };
+  }, [userInteracted]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -239,7 +268,7 @@ export default function DeveloperPage() {
     return message.substring(0, maxLength) + '...';
   };
 
-  // Skills list (added Node.js)
+  // Skills list (updated with Supabase and Ubuntu)
   const skills = [
     { name: 'JavaScript', icon: <FaJs className="text-yellow-500" /> },
     { name: 'TypeScript', icon: <SiTypescript className="text-blue-600" /> },
@@ -249,6 +278,8 @@ export default function DeveloperPage() {
     { name: 'Express', icon: <SiExpress className="text-gray-600" /> },
     { name: 'Python', icon: <FaPython className="text-blue-500" /> },
     { name: 'Tailwind CSS', icon: <SiTailwindcss className="text-cyan-500" /> },
+    { name: 'Supabase', icon: <SiSupabase className="text-green-600" /> },
+    { name: 'Ubuntu', icon: <FaUbuntu className="text-orange-600" /> },
   ];
 
   // Data sources
@@ -279,12 +310,6 @@ export default function DeveloperPage() {
       url: 'https://whatsapp.com/channel/0029VbBjOdCEAKW7afdv7g2y',
       color: 'bg-green-500',
     },
-  ];
-
-  // Crypto addresses (only BTC and ETH)
-  const cryptoAddresses = [
-    { name: 'BTC', address: '1Lzfk3fv3iVFW1DLESEcsgqT1vbpo1eSc5', icon: <FaBitcoin className="w-5 h-5" />, bgColor: 'bg-orange-500' },
-    { name: 'ETH', address: '0x0dED3c0B467093075B096394AA63E13F8298FC93', icon: <FaEthereum className="w-5 h-5" />, bgColor: 'bg-blue-500' },
   ];
 
   // Skeleton components
@@ -341,7 +366,24 @@ export default function DeveloperPage() {
 
         {/* Profile Card */}
         <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 overflow-hidden mb-6 transition-opacity duration-500">
-          <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-32"></div>
+          {/* Video Cover */}
+          <div className="relative h-32 overflow-hidden">
+            <video
+              ref={videoRef}
+              autoPlay
+              loop
+              playsInline
+              controls={false}
+              muted={isMuted}  // muted diatur berdasarkan state
+              className="absolute inset-0 w-full h-full object-cover"
+            >
+              <source src="/asset/dev/sampul.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+            {/* Overlay tipis agar konten di atasnya tetap terbaca */}
+            <div className="absolute inset-0 bg-black/20"></div>
+          </div>
+
           <div className="relative px-6 pb-6">
             <div className="absolute -top-16 left-6">
               <div className="w-28 h-28 rounded-full border-4 border-white shadow-lg overflow-hidden bg-white">
@@ -389,7 +431,7 @@ export default function DeveloperPage() {
                 </div>
               </div>
 
-              {/* Connect Section */}
+              {/* Connect Section (dengan GitHub) */}
               <div className="mt-6">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Connect</h2>
                 <div className="flex flex-wrap gap-3">
@@ -399,19 +441,29 @@ export default function DeveloperPage() {
                       href={social.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`${social.color} text-white p-2 rounded-lg hover:opacity-90 transition flex items-center gap-2 text-sm`}
+                      className={`${social.color} text-white p-2 rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200 flex items-center gap-2 text-sm`}
                       title={social.name}
                     >
                       {social.icon}
                       <span className="hidden xs:inline">{social.name}</span>
                     </a>
                   ))}
+                  {/* GitHub */}
+                  <a
+                    href={repoData?.html_url || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="GitHub Repository"
+                    className="inline-flex items-center justify-center p-2 bg-gray-800 text-white rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200"
+                  >
+                    <FaGithub className="w-5 h-5" />
+                  </a>
                 </div>
               </div>
 
-              {/* Donate Section - Icons only with aria-label, including BTC and ETH */}
+              {/* Donate Section - Buy me coffee */}
               <div className="mt-6">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">Buy me coffiee</h2>
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">Buy me coffee</h2>
                 <div className="flex flex-wrap gap-3">
                   {/* Saweria */}
                   <a
@@ -419,7 +471,7 @@ export default function DeveloperPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Donate via Saweria"
-                    className="inline-flex items-center justify-center p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-sm"
+                    className="inline-flex items-center justify-center p-2 bg-red-500 text-white rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200"
                   >
                     <FaHeart className="w-5 h-5" />
                   </a>
@@ -429,35 +481,23 @@ export default function DeveloperPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Support on Ko-fi"
-                    className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shadow-sm"
+                    className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200"
                   >
                     <FaCoffee className="w-5 h-5" />
                   </a>
-                  {/* GitHub */}
-                  <a
-                    href={repoData?.html_url || '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="GitHub Repository"
-                    className="inline-flex items-center justify-center p-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition shadow-sm"
-                  >
-                    <FaGithub className="w-5 h-5" />
-                  </a>
-
                   {/* BTC */}
                   <button
                     onClick={() => navigator.clipboard.writeText('1Lzfk3fv3iVFW1DLESEcsgqT1vbpo1eSc5')}
                     aria-label="Copy BTC address"
-                    className="inline-flex items-center justify-center p-2 bg-orange-500 text-white rounded-lg hover:opacity-90 transition shadow-sm"
+                    className="inline-flex items-center justify-center p-2 bg-orange-500 text-white rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200"
                   >
                     <FaBitcoin className="w-5 h-5" />
                   </button>
-
                   {/* ETH */}
                   <button
                     onClick={() => navigator.clipboard.writeText('0x0dED3c0B467093075B096394AA63E13F8298FC93')}
                     aria-label="Copy ETH address"
-                    className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg hover:opacity-90 transition shadow-sm"
+                    className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200"
                   >
                     <FaEthereum className="w-5 h-5" />
                   </button>
@@ -686,11 +726,6 @@ export default function DeveloperPage() {
           <p className="text-xs text-gray-500 mt-4">
             quranku utilizes data sourced from the parties mentioned above. We sincerely appreciate and thank you for granting permission to use this data. However, if there are any objections, please contact the developer using the contact information provided above. We will promptly take action to remove the specified data.
           </p>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-8 text-center text-xs text-gray-400">
-          © {new Date().getFullYear()} quranku by devnova-id
         </div>
       </div>
 
