@@ -24,9 +24,10 @@ import {
   FaSpotify,
   FaBitcoin,
   FaEthereum,
+  FaUbuntu,
 } from 'react-icons/fa';
 import { FaCodeCommit } from "react-icons/fa6";
-import { SiTypescript, SiNextdotjs, SiTailwindcss, SiReact, SiExpress, SiNodedotjs } from 'react-icons/si';
+import { SiTypescript, SiNextdotjs, SiTailwindcss, SiReact, SiExpress, SiNodedotjs, SiSupabase } from 'react-icons/si';
 import { BiCodeAlt } from 'react-icons/bi';
 
 interface RepoData {
@@ -239,7 +240,7 @@ export default function DeveloperPage() {
     return message.substring(0, maxLength) + '...';
   };
 
-  // Skills list (added Node.js)
+  // Skills list (updated with Supabase and Ubuntu)
   const skills = [
     { name: 'JavaScript', icon: <FaJs className="text-yellow-500" /> },
     { name: 'TypeScript', icon: <SiTypescript className="text-blue-600" /> },
@@ -249,6 +250,8 @@ export default function DeveloperPage() {
     { name: 'Express', icon: <SiExpress className="text-gray-600" /> },
     { name: 'Python', icon: <FaPython className="text-blue-500" /> },
     { name: 'Tailwind CSS', icon: <SiTailwindcss className="text-cyan-500" /> },
+    { name: 'Supabase', icon: <SiSupabase className="text-green-600" /> },
+    { name: 'Ubuntu', icon: <FaUbuntu className="text-orange-600" /> },
   ];
 
   // Data sources
@@ -256,6 +259,7 @@ export default function DeveloperPage() {
     { name: 'equran.id', url: 'https://equran.id/' },
     { name: 'jadwalsholathariini.id', url: 'https://jadwalsholathariini.id/' },
     { name: 'quran.tazkia.ac.id', url: 'https://quran.tazkia.ac.id/' },
+    { name: 'api.hadith.gading.dev', url: 'https://api.hadith.gading.dev' },
   ];
 
   // Social media links
@@ -349,8 +353,10 @@ export default function DeveloperPage() {
                   alt="Developer Profile"
                   width={112}
                   height={112}
-                  className="object-cover w-full h-full"
                   priority
+                  draggable={false}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className="object-cover w-full h-full protected-img"
                 />
               </div>
             </div>
@@ -386,7 +392,7 @@ export default function DeveloperPage() {
                 </div>
               </div>
 
-              {/* Connect Section */}
+              {/* Connect Section (with GitHub added) */}
               <div className="mt-6">
                 <h2 className="text-sm font-semibold text-gray-700 mb-3">Connect</h2>
                 <div className="flex flex-wrap gap-3">
@@ -396,19 +402,29 @@ export default function DeveloperPage() {
                       href={social.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`${social.color} text-white p-2 rounded-lg hover:opacity-90 transition flex items-center gap-2 text-sm`}
+                      className={`${social.color} text-white p-2 rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200 flex items-center gap-2 text-sm`}
                       title={social.name}
                     >
                       {social.icon}
                       <span className="hidden xs:inline">{social.name}</span>
                     </a>
                   ))}
+                  {/* GitHub moved here */}
+                  <a
+                    href={repoData?.html_url || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="GitHub Repository"
+                    className="inline-flex items-center justify-center p-2 bg-gray-800 text-white rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200"
+                  >
+                    <FaGithub className="w-5 h-5" />
+                  </a>
                 </div>
               </div>
 
-              {/* Donate Section - Icons only with aria-label, including BTC and ETH */}
+              {/* Donate Section - Buy me coffee (fixed spelling) */}
               <div className="mt-6">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">Buy me coffiee</h2>
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">Buy me coffee</h2>
                 <div className="flex flex-wrap gap-3">
                   {/* Saweria */}
                   <a
@@ -416,7 +432,7 @@ export default function DeveloperPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Donate via Saweria"
-                    className="inline-flex items-center justify-center p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-sm"
+                    className="inline-flex items-center justify-center p-2 bg-red-500 text-white rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200"
                   >
                     <FaHeart className="w-5 h-5" />
                   </a>
@@ -426,35 +442,23 @@ export default function DeveloperPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Support on Ko-fi"
-                    className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shadow-sm"
+                    className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200"
                   >
                     <FaCoffee className="w-5 h-5" />
                   </a>
-                  {/* GitHub */}
-                  <a
-                    href={repoData?.html_url || '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="GitHub Repository"
-                    className="inline-flex items-center justify-center p-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition shadow-sm"
-                  >
-                    <FaGithub className="w-5 h-5" />
-                  </a>
-
                   {/* BTC */}
                   <button
                     onClick={() => navigator.clipboard.writeText('1Lzfk3fv3iVFW1DLESEcsgqT1vbpo1eSc5')}
                     aria-label="Copy BTC address"
-                    className="inline-flex items-center justify-center p-2 bg-orange-500 text-white rounded-lg hover:opacity-90 transition shadow-sm"
+                    className="inline-flex items-center justify-center p-2 bg-orange-500 text-white rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200"
                   >
                     <FaBitcoin className="w-5 h-5" />
                   </button>
-
                   {/* ETH */}
                   <button
                     onClick={() => navigator.clipboard.writeText('0x0dED3c0B467093075B096394AA63E13F8298FC93')}
                     aria-label="Copy ETH address"
-                    className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg hover:opacity-90 transition shadow-sm"
+                    className="inline-flex items-center justify-center p-2 bg-blue-500 text-white rounded-lg shadow-md hover:shadow-lg active:translate-y-1 active:shadow-sm transition-all duration-200"
                   >
                     <FaEthereum className="w-5 h-5" />
                   </button>
@@ -684,11 +688,6 @@ export default function DeveloperPage() {
             quranku utilizes data sourced from the parties mentioned above. We sincerely appreciate and thank you for granting permission to use this data. However, if there are any objections, please contact the developer using the contact information provided above. We will promptly take action to remove the specified data.
           </p>
         </div>
-
-        {/* Footer */}
-        <div className="mt-8 text-center text-xs text-gray-400">
-          © {new Date().getFullYear()} quranku by devnova-id
-        </div>
       </div>
 
       {/* Custom breakpoint for social names */}
@@ -697,6 +696,13 @@ export default function DeveloperPage() {
           .xs\\:inline {
             display: inline;
           }
+        }
+      
+        .protected-img {
+          -webkit-user-drag: none;
+          -webkit-touch-callout: none;
+          user-select: none;
+          pointer-events: none;
         }
       `}</style>
     </div>

@@ -28,7 +28,7 @@ export default function ServiceWorkerRegistration() {
                   // Tampilkan notifikasi update
                   toast.custom((t) => (
                     <div className="bg-blue-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center justify-between gap-4">
-                      <p className="text-sm">Versi baru tersedia! 🔄</p>
+                      <p className="text-sm">Versi baru tersedia!</p>
                       <div className="flex gap-2">
                         <button
                           onClick={() => {
@@ -63,7 +63,7 @@ export default function ServiceWorkerRegistration() {
             if (event.data.type === 'SW_ACTIVATED') {
               console.log('Service Worker activated, version:', event.data.version);
               toast.success('Aplikasi diperbarui!');
-              // window.location.reload();
+              window.location.reload();
             }
           });
 

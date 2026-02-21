@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   FaMapMarkerAlt, 
   FaSync, 
@@ -15,8 +15,7 @@ import {
   FaSun,
   FaCloudMoon,
   FaDatabase,
-  FaCloudDownloadAlt,
-  FaExclamationTriangle
+  FaCloudDownloadAlt
 } from 'react-icons/fa';
 import { CiCloudSun } from "react-icons/ci";
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,50 +25,31 @@ import { toast } from 'sonner';
 
 interface Province {
   name: string;
-  slug: string;
-  city_count: number;
 }
 
 interface City {
   name: string;
-  slug: string;
-  province: string;
 }
 
-interface PrayerTime {
-  name: string;
-  time_24h: string;
-  is_next: boolean;
-}
-
-interface DailySchedule {
-  prayers: PrayerTime[];
-  next_prayer: PrayerTime;
-}
-
-interface MonthlyScheduleDay {
-  date: string;
-  hijri_date: string;
-  is_today: boolean;
-  prayers: {
+interface PrayerSchedule {
+  provinsi: string;
+  kabkota: string;
+  bulan: number;
+  tahun: number;
+  bulan_nama: string;
+  jadwal: Array<{
+    tanggal: number;
+    tanggal_lengkap: string;
+    hari: string;
     imsak: string;
     subuh: string;
     terbit: string;
+    dhuha: string;
     dzuhur: string;
     ashar: string;
     maghrib: string;
     isya: string;
-  };
-}
-
-interface PrayerSchedule {
-  city: {
-    name: string;
-    date_today: string;
-    hijri_date: string;
-  };
-  today_schedule: DailySchedule;
-  monthly_schedule: MonthlyScheduleDay[];
+  }>;
 }
 
 // ==================== MAIN COMPONENT ====================
@@ -78,8 +58,8 @@ export default function SchedulePage() {
   // State management
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [cities, setCities] = useState<City[]>([]);
-  const [selectedProvince, setSelectedProvince] = useState<Province | null>(null);
-  const [selectedCity, setSelectedCity] = useState<City | null>(null);
+  const [selectedProvince, setSelectedProvince] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<PrayerSchedule | null>(null);
   const [loading, setLoading] = useState({
     provinces: false,
@@ -89,8 +69,6 @@ export default function SchedulePage() {
   const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [hasMoreProvinces, setHasMoreProvinces] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
   const [showMonthlyView, setShowMonthlyView] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -139,18 +117,16 @@ export default function SchedulePage() {
   };
 
   const filteredProvinces = provinces.filter(province =>
-    province.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    province.slug.toLowerCase().includes(searchQuery.toLowerCase())
+    province.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredCities = cities.filter(city =>
-    city.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    city.slug.toLowerCase().includes(searchQuery.toLowerCase())
+    city.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const loadMoreDays = () => {
     if (schedule) {
-      const maxDays = schedule.monthly_schedule.length;
+      const maxDays = schedule.jadwal.length;
       const newDaysToShow = Math.min(daysToShow + 7, maxDays);
       setDaysToShow(newDaysToShow);
       
@@ -164,7 +140,7 @@ export default function SchedulePage() {
 
   // ==================== API FUNCTIONS ====================
 
-  const fetchProvinces = async (page: number = 1) => {
+  const fetchProvinces = async () => {
     if (loading.provinces) return;
     
     setLoading(prev => ({ ...prev, provinces: true }));
@@ -183,7 +159,8 @@ export default function SchedulePage() {
           setLoading(prev => ({ ...prev, provinces: false }));
           
           if (isOnline) {
-            fetchProvincesFromAPI(page);
+            // Refresh cache di background
+            fetchProvincesFromAPI();
           }
           return;
         }
@@ -195,7 +172,7 @@ export default function SchedulePage() {
         return;
       }
 
-      await fetchProvincesFromAPI(page);
+      await fetchProvincesFromAPI();
     } catch (error) {
       console.error('Error fetching provinces:', error);
       toast.error('Gagal memuat daftar provinsi');
@@ -203,11 +180,9 @@ export default function SchedulePage() {
     }
   };
 
-  const fetchProvincesFromAPI = async (page: number = 1) => {
+  const fetchProvincesFromAPI = async () => {
     try {
-      const response = await fetch(
-        `https://api.devnova.icu/api/islamic/prayer-time?type=provinces&page=${page}`
-      );
+      const response = await fetch('https://equran.id/api/v2/shalat/provinsi');
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -215,12 +190,11 @@ export default function SchedulePage() {
       
       const data = await response.json();
       
-      if (data.success && data.data && data.data.provinces) {
-        setProvinces(prev => page === 1 ? data.data.provinces : [...prev, ...data.data.provinces]);
-        setHasMoreProvinces(!!data.data.pagination?.has_next);
-        setCurrentPage(page);
+      if (data.code === 200 && Array.isArray(data.data)) {
+        const provincesData: Province[] = data.data.map((name: string) => ({ name }));
+        setProvinces(provincesData);
         
-        localStorage.setItem('cachedProvinces', JSON.stringify(data.data.provinces));
+        localStorage.setItem('cachedProvinces', JSON.stringify(provincesData));
         localStorage.setItem('cachedProvincesTime', Date.now().toString());
       } else {
         throw new Error('Invalid API response structure');
@@ -233,13 +207,13 @@ export default function SchedulePage() {
     }
   };
 
-  const fetchCities = async (provinceSlug: string, targetCitySlug?: string) => {
-    if (!provinceSlug || loading.cities) return;
+  const fetchCities = async (provinceName: string, targetCityName?: string) => {
+    if (!provinceName || loading.cities) return;
     
     setLoading(prev => ({ ...prev, cities: true }));
     
     try {
-      const cacheKey = `cachedCities_${provinceSlug}`;
+      const cacheKey = `cachedCities_${provinceName}`;
       const cachedCities = localStorage.getItem(cacheKey);
       const cacheTime = localStorage.getItem(`${cacheKey}_time`);
       
@@ -252,19 +226,17 @@ export default function SchedulePage() {
           const citiesData = JSON.parse(cachedCities);
           setCities(citiesData);
           
-          if (targetCitySlug) {
-            const city = citiesData.find((c: City) => c.slug === targetCitySlug);
-            if (city) {
-              setSelectedCity(city);
-            }
+          if (targetCityName) {
+            const city = citiesData.find((c: City) => c.name === targetCityName);
+            if (city) setSelectedCity(city.name);
           } else if (citiesData.length > 0) {
-            setSelectedCity(citiesData[0]);
+            setSelectedCity(citiesData[0].name);
           }
           
           setLoading(prev => ({ ...prev, cities: false }));
           
           if (isOnline) {
-            fetchCitiesFromAPI(provinceSlug, targetCitySlug);
+            fetchCitiesFromAPI(provinceName, targetCityName);
           }
           return;
         }
@@ -276,7 +248,7 @@ export default function SchedulePage() {
         return;
       }
 
-      await fetchCitiesFromAPI(provinceSlug, targetCitySlug);
+      await fetchCitiesFromAPI(provinceName, targetCityName);
     } catch (error) {
       console.error('Error fetching cities:', error);
       toast.error('Gagal memuat daftar kota');
@@ -284,11 +256,13 @@ export default function SchedulePage() {
     }
   };
 
-  const fetchCitiesFromAPI = async (provinceSlug: string, targetCitySlug?: string) => {
+  const fetchCitiesFromAPI = async (provinceName: string, targetCityName?: string) => {
     try {
-      const response = await fetch(
-        `https://api.devnova.icu/api/islamic/prayer-time?type=cities&province=${provinceSlug}`
-      );
+      const response = await fetch('https://equran.id/api/v2/shalat/kabkota', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provinsi: provinceName })
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -296,20 +270,19 @@ export default function SchedulePage() {
       
       const data = await response.json();
       
-      if (data.success && data.data && data.data.cities) {
-        setCities(data.data.cities);
+      if (data.code === 200 && Array.isArray(data.data)) {
+        const citiesData: City[] = data.data.map((name: string) => ({ name }));
+        setCities(citiesData);
         
-        const cacheKey = `cachedCities_${provinceSlug}`;
-        localStorage.setItem(cacheKey, JSON.stringify(data.data.cities));
+        const cacheKey = `cachedCities_${provinceName}`;
+        localStorage.setItem(cacheKey, JSON.stringify(citiesData));
         localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
         
-        if (targetCitySlug) {
-          const city = data.data.cities.find((c: City) => c.slug === targetCitySlug);
-          if (city) {
-            setSelectedCity(city);
-          }
-        } else if (data.data.cities.length > 0) {
-          setSelectedCity(data.data.cities[0]);
+        if (targetCityName) {
+          const city = citiesData.find(c => c.name === targetCityName);
+          if (city) setSelectedCity(city.name);
+        } else if (citiesData.length > 0) {
+          setSelectedCity(citiesData[0].name);
         }
       } else {
         throw new Error('Invalid API response structure');
@@ -328,7 +301,7 @@ export default function SchedulePage() {
     setLoading(prev => ({ ...prev, schedule: true }));
     
     try {
-      const cacheKey = `prayerSchedule_${selectedProvince.slug}_${selectedCity.slug}`;
+      const cacheKey = `prayerSchedule_${selectedProvince}_${selectedCity}`;
       const cachedSchedule = localStorage.getItem(cacheKey);
       const cacheTime = localStorage.getItem(`${cacheKey}_time`);
       
@@ -338,16 +311,13 @@ export default function SchedulePage() {
         
         if (now.getTime() - cacheDate.getTime() < 24 * 60 * 60 * 1000) {
           const scheduleData = JSON.parse(cachedSchedule);
+          setSchedule(scheduleData);
+          setLoading(prev => ({ ...prev, schedule: false }));
           
-          if (scheduleData && scheduleData.city) {
-            setSchedule(scheduleData);
-            setLoading(prev => ({ ...prev, schedule: false }));
-            
-            if (isOnline) {
-              fetchScheduleFromAPI();
-            }
-            return;
+          if (isOnline) {
+            fetchScheduleFromAPI();
           }
+          return;
         }
       }
 
@@ -369,9 +339,14 @@ export default function SchedulePage() {
     if (!selectedProvince || !selectedCity) return;
     
     try {
-      const response = await fetch(
-        `https://api.devnova.icu/api/islamic/prayer-time?type=schedule&province=${selectedProvince.slug}&city=${selectedCity.slug}`
-      );
+      const response = await fetch('https://equran.id/api/v2/shalat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provinsi: selectedProvince,
+          kabkota: selectedCity
+        })
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -379,19 +354,17 @@ export default function SchedulePage() {
       
       const data = await response.json();
       
-      if (data.success && data.data) {
+      if (data.code === 200 && data.data) {
         setSchedule(data.data);
         
-        const cacheKey = `prayerSchedule_${selectedProvince.slug}_${selectedCity.slug}`;
+        const cacheKey = `prayerSchedule_${selectedProvince}_${selectedCity}`;
         localStorage.setItem(cacheKey, JSON.stringify(data.data));
         localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
         
         // Simpan pilihan lokasi ke localStorage
         const location = {
-          province: selectedProvince.name,
-          province_slug: selectedProvince.slug,
-          city: selectedCity.name,
-          city_slug: selectedCity.slug
+          province: selectedProvince,
+          city: selectedCity
         };
         localStorage.setItem('prayerLocation', JSON.stringify(location));
       } else {
@@ -406,18 +379,58 @@ export default function SchedulePage() {
   };
 
   const handleProvinceSelect = (province: Province) => {
-    setSelectedProvince(province);
+    setSelectedProvince(province.name);
     setSelectedCity(null);
     setShowProvinceDropdown(false);
     setSearchQuery('');
-    fetchCities(province.slug);
+    fetchCities(province.name);
   };
 
   const handleCitySelect = (city: City) => {
-    setSelectedCity(city);
+    setSelectedCity(city.name);
     setShowCityDropdown(false);
     setSearchQuery('');
   };
+
+  // ==================== COMPUTED DATA ====================
+
+  const todaySchedule = useMemo(() => {
+    if (!schedule) return null;
+    const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    return schedule.jadwal.find(d => d.tanggal_lengkap === todayStr) || schedule.jadwal[0];
+  }, [schedule]);
+
+  const prayerList = useMemo(() => {
+    if (!todaySchedule) return [];
+    const order = ['imsak', 'subuh', 'terbit', 'dzuhur', 'ashar', 'maghrib', 'isya'];
+    return order.map(name => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1), // Imsak, Subuh, dll
+      time_24h: todaySchedule[name as keyof typeof todaySchedule] as string,
+      is_next: false
+    }));
+  }, [todaySchedule]);
+
+  const nextPrayer = useMemo(() => {
+    if (!todaySchedule) return null;
+    const now = new Date();
+    const currentTimeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    // Cari sholat pertama yang waktunya > currentTimeStr
+    for (const prayer of prayerList) {
+      if (prayer.time_24h > currentTimeStr) {
+        return prayer;
+      }
+    }
+    // Jika semua sudah lewat, kembalikan null (tidak ada sholat berikutnya hari ini)
+    return null;
+  }, [todaySchedule, prayerList]);
+
+  const prayerListWithNext = useMemo(() => {
+    return prayerList.map(p => ({
+      ...p,
+      is_next: nextPrayer?.name === p.name
+    }));
+  }, [prayerList, nextPrayer]);
 
   // ==================== EFFECTS ====================
 
@@ -457,10 +470,10 @@ export default function SchedulePage() {
     if (savedLocation && provinces.length > 0) {
       try {
         const location = JSON.parse(savedLocation);
-        const province = provinces.find(p => p.slug === location.province_slug);
+        const province = provinces.find(p => p.name === location.province);
         if (province) {
-          setSelectedProvince(province);
-          fetchCities(province.slug, location.city_slug);
+          setSelectedProvince(province.name);
+          fetchCities(province.name, location.city);
         }
       } catch (error) {
         console.error('Error parsing saved location:', error);
@@ -524,7 +537,7 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* LOCATION SELECTOR - MANUAL ONLY */}
+          {/* LOCATION SELECTOR */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/80 p-4 mb-6 shadow-sm shadow-slate-100">
             <div className="flex items-center gap-2 mb-3">
               <FaMapMarkerAlt className="w-4 h-4 text-blue-600" />
@@ -552,10 +565,10 @@ export default function SchedulePage() {
                       </div>
                       <div className="text-left">
                         <div className="font-medium text-slate-900 truncate max-w-[180px]">
-                          {selectedProvince ? selectedProvince.name : 'Pilih Provinsi'}
+                          {selectedProvince || 'Pilih Provinsi'}
                         </div>
                         <div className="text-xs text-slate-500">
-                          {selectedProvince ? `${selectedProvince.city_count} kota` : 'Pilih provinsi'}
+                          {selectedProvince ? `${cities.length} kota` : 'Pilih provinsi'}
                         </div>
                       </div>
                     </div>
@@ -602,42 +615,22 @@ export default function SchedulePage() {
                           ) : (
                             filteredProvinces.map((province) => (
                               <button
-                                key={province.slug}
+                                key={province.name}
                                 onClick={() => handleProvinceSelect(province)}
                                 className={`w-full px-4 py-3 text-left hover:bg-blue-50 border-b border-slate-100 last:border-b-0 flex items-center justify-between transition-colors ${
-                                  selectedProvince?.slug === province.slug ? 'bg-blue-50' : ''
+                                  selectedProvince === province.name ? 'bg-blue-50' : ''
                                 }`}
                               >
                                 <div className="flex-1">
                                   <div className="font-medium text-slate-900">{province.name}</div>
-                                  <div className="text-xs text-slate-500 mt-0.5">
-                                    {province.city_count} kota/kabupaten
-                                  </div>
                                 </div>
-                                {selectedProvince?.slug === province.slug && (
+                                {selectedProvince === province.name && (
                                   <div className="ml-2">
                                     <div className="w-2 h-2 rounded-full bg-blue-600"></div>
                                   </div>
                                 )}
                               </button>
                             ))
-                          )}
-                          
-                          {hasMoreProvinces && filteredProvinces.length > 0 && !loading.provinces && (
-                            <button
-                              onClick={() => fetchProvinces(currentPage + 1)}
-                              disabled={loading.provinces}
-                              className="w-full px-4 py-3 text-center text-blue-600 hover:bg-blue-50 border-t border-slate-100 text-sm font-medium"
-                            >
-                              {loading.provinces ? (
-                                <span className="flex items-center justify-center gap-2">
-                                  <FaSync className="w-3 h-3 animate-spin" />
-                                  Memuat...
-                                </span>
-                              ) : (
-                                'Muat lebih banyak'
-                              )}
-                            </button>
                           )}
                         </div>
                       </motion.div>
@@ -676,10 +669,10 @@ export default function SchedulePage() {
                       </div>
                       <div className="text-left">
                         <div className="font-medium truncate max-w-[180px]">
-                          {selectedCity ? selectedCity.name : 'Pilih Kota'}
+                          {selectedCity || 'Pilih Kota'}
                         </div>
                         <div className="text-xs text-slate-500">
-                          {selectedProvince ? selectedProvince.name : 'Pilih provinsi dulu'}
+                          {selectedProvince || 'Pilih provinsi dulu'}
                         </div>
                       </div>
                     </div>
@@ -726,19 +719,16 @@ export default function SchedulePage() {
                           ) : (
                             filteredCities.map((city) => (
                               <button
-                                key={city.slug}
+                                key={city.name}
                                 onClick={() => handleCitySelect(city)}
                                 className={`w-full px-4 py-3 text-left hover:bg-blue-50 border-b border-slate-100 last:border-b-0 flex items-center justify-between transition-colors ${
-                                  selectedCity?.slug === city.slug ? 'bg-blue-50' : ''
+                                  selectedCity === city.name ? 'bg-blue-50' : ''
                                 }`}
                               >
                                 <div className="flex-1">
                                   <div className="font-medium text-slate-900">{city.name}</div>
-                                  <div className="text-xs text-slate-500 mt-0.5">
-                                    {city.province}
-                                  </div>
                                 </div>
-                                {selectedCity?.slug === city.slug && (
+                                {selectedCity === city.name && (
                                   <div className="ml-2">
                                     <div className="w-2 h-2 rounded-full bg-blue-600"></div>
                                   </div>
@@ -756,7 +746,7 @@ export default function SchedulePage() {
           </div>
 
           {/* TODAY'S INFO */}
-          {schedule && (
+          {schedule && todaySchedule && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -765,13 +755,13 @@ export default function SchedulePage() {
               <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
                 <div className="text-center lg:text-left">
                   <div className="text-sm opacity-90 mb-1">Hari ini</div>
-                  <div className="text-xl font-bold">{schedule.city.date_today}</div>
-                  <div className="text-sm opacity-80 mt-1">{schedule.city.hijri_date}</div>
+                  <div className="text-xl font-bold">{todaySchedule.tanggal_lengkap}</div>
                 </div>
                 
                 <div className="text-center">
                   <div className="text-sm opacity-90 mb-1">Lokasi</div>
-                  <div className="text-xl font-bold">{schedule.city.name}</div>
+                  <div className="text-xl font-bold">{schedule.kabkota}</div>
+                  <div className="text-sm opacity-80">{schedule.provinsi}</div>
                 </div>
                 
                 <div className="text-center lg:text-right">
@@ -794,7 +784,7 @@ export default function SchedulePage() {
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-3 border-blue-500 border-t-transparent mb-4"></div>
             <div className="text-slate-600">Memuat jadwal sholat...</div>
             <div className="text-sm text-slate-500 mt-2">
-              {selectedCity?.name}, {selectedProvince?.name}
+              {selectedCity}, {selectedProvince}
             </div>
           </div>
         ) : schedule ? (
@@ -805,7 +795,7 @@ export default function SchedulePage() {
                 <div>
                   <h2 className="text-xl font-bold text-slate-900">Waktu Sholat Hari Ini</h2>
                   <p className="text-sm text-slate-600 mt-1">
-                    {schedule.city.date_today} • {schedule.city.hijri_date}
+                    {todaySchedule?.tanggal_lengkap} • {todaySchedule?.hari}
                   </p>
                 </div>
                 <button
@@ -819,7 +809,7 @@ export default function SchedulePage() {
 
               {!showMonthlyView ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3">
-                  {schedule.today_schedule.prayers.map((prayer) => {
+                  {prayerListWithNext.map((prayer) => {
                     const timeRemaining = getTimeRemaining(prayer.time_24h);
                     const isNextPrayer = prayer.is_next;
                     
@@ -895,49 +885,63 @@ export default function SchedulePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {schedule.monthly_schedule.slice(0, daysToShow).map((day) => (
-                          <tr
-                            key={day.date}
-                            className={`hover:bg-blue-50/50 transition ${
-                              day.is_today ? 'bg-blue-50' : ''
-                            }`}
-                          >
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center ${
-                                  day.is_today
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-100 text-slate-700'
-                                }`}>
-                                  <span className="text-sm font-bold">{day.date.split('-')[2]}</span>
-                                  <span className="text-[10px] opacity-80">Hijri</span>
-                                </div>
-                                <div className="text-left">
-                                  <div className="text-sm font-medium text-slate-900">
-                                    {day.date}
+                        {schedule.jadwal.slice(0, daysToShow).map((day) => {
+                          const isToday = day.tanggal_lengkap === new Date().toISOString().split('T')[0];
+                          return (
+                            <tr
+                              key={day.tanggal}
+                              className={`hover:bg-blue-50/50 transition ${
+                                isToday ? 'bg-blue-50' : ''
+                              }`}
+                            >
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center ${
+                                    isToday
+                                      ? 'bg-blue-600 text-white'
+                                      : 'bg-slate-100 text-slate-700'
+                                  }`}>
+                                    <span className="text-sm font-bold">{day.tanggal}</span>
+                                    <span className="text-[10px] opacity-80">{day.hari.slice(0,3)}</span>
                                   </div>
-                                  <div className="text-xs text-slate-500">
-                                    {day.hijri_date.trim()}
+                                  <div className="text-left">
+                                    <div className="text-sm font-medium text-slate-900">
+                                      {day.tanggal_lengkap}
+                                    </div>
                                   </div>
-                                </div>
-                              </div>
-                            </td>
-                            {['imsak', 'subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'].map((prayer) => (
-                              <td key={prayer} className="px-4 py-3 whitespace-nowrap text-center">
-                                <div className="text-sm font-medium text-slate-900">
-                                  {day.prayers[prayer as keyof typeof day.prayers]}
-                                </div>
-                                <div className="text-xs text-slate-500 mt-1">
-                                  {formatTime(day.prayers[prayer as keyof typeof day.prayers])}
                                 </div>
                               </td>
-                            ))}
-                          </tr>
-                        ))}
+                              <td className="px-4 py-3 whitespace-nowrap text-center">
+                                <div className="text-sm font-medium text-slate-900">{day.imsak}</div>
+                                <div className="text-xs text-slate-500 mt-1">{formatTime(day.imsak)}</div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-center">
+                                <div className="text-sm font-medium text-slate-900">{day.subuh}</div>
+                                <div className="text-xs text-slate-500 mt-1">{formatTime(day.subuh)}</div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-center">
+                                <div className="text-sm font-medium text-slate-900">{day.dzuhur}</div>
+                                <div className="text-xs text-slate-500 mt-1">{formatTime(day.dzuhur)}</div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-center">
+                                <div className="text-sm font-medium text-slate-900">{day.ashar}</div>
+                                <div className="text-xs text-slate-500 mt-1">{formatTime(day.ashar)}</div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-center">
+                                <div className="text-sm font-medium text-slate-900">{day.maghrib}</div>
+                                <div className="text-xs text-slate-500 mt-1">{formatTime(day.maghrib)}</div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-center">
+                                <div className="text-sm font-medium text-slate-900">{day.isya}</div>
+                                <div className="text-xs text-slate-500 mt-1">{formatTime(day.isya)}</div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
-                  {daysToShow < schedule.monthly_schedule.length && (
+                  {daysToShow < schedule.jadwal.length && (
                     <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 text-center">
                       <button 
                         onClick={loadMoreDays}
@@ -953,7 +957,7 @@ export default function SchedulePage() {
             </div>
 
             {/* NEXT PRAYER HIGHLIGHT */}
-            {schedule.today_schedule.next_prayer && (
+            {nextPrayer && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -970,19 +974,19 @@ export default function SchedulePage() {
                     
                     <div className="p-4 bg-white/20 rounded-2xl mb-4">
                       <div className="p-4 bg-white/30 rounded-full">
-                        {getPrayerIcon(schedule.today_schedule.next_prayer.name)}
+                        {getPrayerIcon(nextPrayer.name)}
                       </div>
                     </div>
                     
                     <h3 className="text-2xl sm:text-3xl font-bold mb-2">
-                      {schedule.today_schedule.next_prayer.name}
+                      {nextPrayer.name}
                     </h3>
                     
                     <div className="text-xl opacity-90 flex items-center justify-center gap-2 mb-6">
                       <FaClock className="w-5 h-5" />
-                      {formatTime(schedule.today_schedule.next_prayer.time_24h)}
+                      {formatTime(nextPrayer.time_24h)}
                       <span className="text-lg opacity-75">
-                        ({schedule.today_schedule.next_prayer.time_24h})
+                        ({nextPrayer.time_24h})
                       </span>
                     </div>
                     
@@ -992,32 +996,30 @@ export default function SchedulePage() {
                         <span>Sisa Waktu</span>
                       </div>
                       <div className="text-3xl sm:text-4xl font-bold bg-white/10 rounded-2xl px-8 py-4 backdrop-blur-sm">
-                        {getTimeRemaining(schedule.today_schedule.next_prayer.time_24h) || 'WAKTU TELAH TIBA'}
+                        {getTimeRemaining(nextPrayer.time_24h) || 'WAKTU TELAH TIBA'}
                       </div>
                     </div>
                     
-                    <div className="flex flex-col sm:flex-row gap-3 justify-center w-full max-w-md">
-                      <button
-                        onClick={() => {
-                          const shareText = `Waktu sholat ${schedule.today_schedule.next_prayer.name} di ${schedule.city.name} adalah ${schedule.today_schedule.next_prayer.time_24h}. Ayo sholat tepat waktu!`;
-                          if (navigator.share) {
-                            navigator.share({
-                              title: `Waktu Sholat ${schedule.today_schedule.next_prayer.name}`,
-                              text: shareText,
-                            });
-                          } else {
-                            navigator.clipboard.writeText(shareText);
-                            toast.success('Jadwal sholat disalin ke clipboard');
-                          }
-                        }}
-                        className="px-6 py-3 bg-white/20 text-white rounded-xl font-bold hover:bg-white/30 transition flex items-center justify-center gap-2 border border-white/30"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                        </svg>
-                        Bagikan
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => {
+                        const shareText = `Waktu sholat ${nextPrayer.name} di ${schedule.kabkota}, ${schedule.provinsi} adalah ${nextPrayer.time_24h}. Ayo sholat tepat waktu!`;
+                        if (navigator.share) {
+                          navigator.share({
+                            title: `Waktu Sholat ${nextPrayer.name}`,
+                            text: shareText,
+                          });
+                        } else {
+                          navigator.clipboard.writeText(shareText);
+                          toast.success('Jadwal sholat disalin ke clipboard');
+                        }
+                      }}
+                      className="px-6 py-3 bg-white/20 text-white rounded-xl font-bold hover:bg-white/30 transition flex items-center justify-center gap-2 border border-white/30"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                      </svg>
+                      Bagikan
+                    </button>
                   </div>
                 </div>
               </motion.div>
@@ -1039,7 +1041,7 @@ export default function SchedulePage() {
             )}
           </>
         ) : (
-          /* EMPTY STATE - hanya tampil jika tidak ada dropdown yang terbuka */
+          /* EMPTY STATE */
           !showProvinceDropdown && !showCityDropdown && (
             <div className="text-center py-12 bg-white/50 backdrop-blur-sm rounded-2xl border border-slate-200">
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center border border-blue-200">
@@ -1050,7 +1052,7 @@ export default function SchedulePage() {
               </h3>
               <p className="text-slate-600 mb-6 max-w-md mx-auto">
                 {selectedProvince && selectedCity 
-                  ? `Memuat jadwal sholat untuk ${selectedCity.name}, ${selectedProvince.name}`
+                  ? `Memuat jadwal sholat untuk ${selectedCity}, ${selectedProvince}`
                   : 'Pilih provinsi dan kota/kabupaten untuk melihat jadwal sholat di lokasi Anda'
                 }
               </p>
