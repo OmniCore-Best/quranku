@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import {
   CodeBracketIcon,
   BookOpenIcon,
-  BookmarkIcon,
+  CalculatorIcon,        
   DocumentTextIcon,
   MagnifyingGlassIcon,
   UserIcon,
@@ -32,16 +32,43 @@ const popupMenuItems: PopupItem[] = [
     href: '/developer' 
   },
   {
-    id: 2, name: 'Hadist',
+    id: 2, 
+    name: 'Hadist',
     icon: <BookOpenIcon className="w-5 h-5" />, 
     comingSoon: false, 
     href: '/hadist' 
   },
-  { id: 3, name: 'Asmaul Husna', icon: <BookmarkIcon className="w-5 h-5" />, comingSoon: true },
-  { id: 4, name: 'Sejarah', icon: <DocumentTextIcon className="w-5 h-5" />, comingSoon: true },
-  { id: 5, name: 'Cari', icon: <MagnifyingGlassIcon className="w-5 h-5" />, comingSoon: true },
-  { id: 6, name: 'Profil', icon: <UserIcon className="w-5 h-5" />, comingSoon: true },
-  { id: 7, name: 'Setelan', icon: <Cog6ToothIcon className="w-5 h-5" />, comingSoon: true },
+  { 
+    id: 3, 
+    name: 'Kalkulator Zakat',         
+    icon: <CalculatorIcon className="w-5 h-5" />,
+    comingSoon: false, 
+    href: '/kalkulator-zakat'             
+  },
+  { 
+    id: 4, 
+    name: 'Sejarah', 
+    icon: <DocumentTextIcon className="w-5 h-5" />, 
+    comingSoon: true 
+  },
+  { 
+    id: 5, 
+    name: 'Cari', 
+    icon: <MagnifyingGlassIcon className="w-5 h-5" />, 
+    comingSoon: true 
+  },
+  { 
+    id: 6, 
+    name: 'Profil', 
+    icon: <UserIcon className="w-5 h-5" />, 
+    comingSoon: true 
+  },
+  { 
+    id: 7, 
+    name: 'Setelan', 
+    icon: <Cog6ToothIcon className="w-5 h-5" />, 
+    comingSoon: true 
+  },
 ];
 
 interface PopupMenuProps {
