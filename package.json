@@ -6,6 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
+    "readme": "node readme-generator.js",
+    "icon": "node icon-g.js",
     "lint": "eslint"
   },
   "dependencies": {
