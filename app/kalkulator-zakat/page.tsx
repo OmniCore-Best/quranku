@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { FaSpinner, FaExclamationTriangle } from 'react-icons/fa';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { sendMessageWithFallback, OpenRouterMessage } from '@/lib/ai';
 
 // ==================== Tipe Data ====================
@@ -12,6 +14,48 @@ type PreciousType = 'gold' | 'silver';
 type AgriIrrigation = 'irrigated' | 'rainfed';
 type LivestockType = 'goat' | 'cow';
 type IncomeNisabType = 'gold' | 'rice';
+
+// ==================== Komponen Markdown untuk Hasil AI ====================
+const ZakatMarkdown = ({ content }: { content: string }) => {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-2">
+            <table className="min-w-full border-collapse border border-gray-300 text-sm">
+              {children}
+            </table>
+          </div>
+        ),
+        th: ({ children }) => <th className="border border-gray-300 px-2 py-1 bg-gray-100 font-semibold">{children}</th>,
+        td: ({ children }) => <td className="border border-gray-300 px-2 py-1">{children}</td>,
+        code: ({ className, children, ...props }: any) => {
+          const isInline = !className;
+          if (isInline) {
+            return <code className="bg-gray-100 px-1 rounded text-xs font-mono" {...props}>{children}</code>;
+          }
+          return (
+            <pre className="bg-gray-100 p-2 rounded overflow-x-auto text-xs">
+              <code className={className} {...props}>{children}</code>
+            </pre>
+          );
+        },
+        a: ({ href, children }) => (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+            {children}
+          </a>
+        ),
+        p: ({ children }) => <p className="mb-2 last:mb-0 text-gray-800">{children}</p>,
+        strong: ({ children }) => <strong className="font-bold text-emerald-800">{children}</strong>,
+        ul: ({ children }) => <ul className="list-disc list-inside mb-2 text-gray-800">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal list-inside mb-2 text-gray-800">{children}</ol>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+};
 
 // ==================== System Prompt untuk AI ====================
 const ZAKAT_SYSTEM_PROMPT = `Anda adalah asisten AI ahli fiqih zakat. Tugas Anda menghitung zakat berdasarkan data yang diberikan pengguna dengan ketentuan syariah berikut:
@@ -36,7 +80,7 @@ Berikan hasil perhitungan dalam bahasa Indonesia yang jelas, dengan rincian:
 - Catatan perhitungan singkat
 Sertakan disclaimer bahwa ini adalah bantuan AI dan sebaiknya dikonfirmasi ke amil zakat.
 
-JANGAN memberikan tautan eksternal. JANGAN menggunakan markdown yang berlebihan.`;
+JANGAN memberikan tautan eksternal. Gunakan markdown secukupnya (tabel, list, bold).`;
 
 // ==================== Komponen Utama ====================
 export default function KalkulatorZakat() {
@@ -87,7 +131,7 @@ export default function KalkulatorZakat() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper format Rupiah
+  // Helper format Rupiah untuk tampilan input
   const formatIDR = (value: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
   };
@@ -252,7 +296,7 @@ export default function KalkulatorZakat() {
             </button>
           </div>
 
-          {/* Hasil AI */}
+          {/* Hasil AI dirender dengan Markdown */}
           {isLoading && (
             <div className="mt-6 p-5 bg-emerald-50 rounded-lg border border-emerald-200">
               <div className="flex items-center justify-center gap-2 text-emerald-700"><FaSpinner className="animate-spin" /> AI sedang memproses...</div>
@@ -260,7 +304,7 @@ export default function KalkulatorZakat() {
           )}
           {aiResult && !isLoading && (
             <div className="mt-6 p-5 bg-emerald-50 rounded-lg border border-emerald-200">
-              <div className="text-gray-800 whitespace-pre-wrap">{aiResult}</div>
+              <ZakatMarkdown content={aiResult} />
               <div className="mt-4 flex items-start gap-2 text-xs text-amber-600 bg-amber-50 p-2 rounded-lg">
                 <FaExclamationTriangle className="w-4 h-4 mt-0.5" />
                 <span>Hasil ini dihasilkan oleh AI dan bersifat informatif. Konsultasikan dengan amil zakat terpercaya.</span>
