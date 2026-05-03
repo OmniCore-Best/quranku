@@ -139,8 +139,28 @@ const NumberInput = ({
   );
 };
 
-// ==================== Komponen Markdown dengan LaTeX (Responsif) ====================
+// ==================== Komponen Markdown dengan LaTeX + Preprocessing ====================
 const ZakatMarkdown = ({ content }: { content: string }) => {
+  // Preprocessing: ubah [ rumus ] menjadi $$ rumus $$ untuk memastikan LaTeX terender
+  let preprocessed = content;
+
+  // Pola untuk [ ... ] yang berisi karakter LaTeX (\, ^, _, dll)
+  preprocessed = preprocessed.replace(
+    /\[([^\]]*\\[^\]]*)\]/g,
+    (_, formula) => `$$ ${formula.trim()} $$`
+  );
+
+  // Pola untuk [ rumus ] yang mengandung operator matematika umum (+, -, =, ×, dll)
+  preprocessed = preprocessed.replace(
+    /\[([^\]]+)\]/g,
+    (match, formula) => {
+      if (/[=+\-×÷<>≤≥]/.test(formula) || formula.includes('text')) {
+        return `$$ ${formula.trim()} $$`;
+      }
+      return match;
+    }
+  );
+
   return (
     <div className="max-w-full overflow-x-auto">
       <ReactMarkdown
@@ -156,7 +176,7 @@ const ZakatMarkdown = ({ content }: { content: string }) => {
           ),
           th: ({ children }) => <th className="border border-gray-300 px-2 py-1 bg-gray-100 font-semibold break-words">{children}</th>,
           td: ({ children }) => <td className="border border-gray-300 px-2 py-1 break-words">{children}</td>,
-          code: ({ className, children, ...props }) => {
+          code: ({ className, children, ...props }: any) => {
             const isInline = !className;
             if (isInline) {
               return <code className="bg-gray-100 px-1 rounded text-xs font-mono break-words" {...props}>{children}</code>;
@@ -178,13 +198,13 @@ const ZakatMarkdown = ({ content }: { content: string }) => {
           ol: ({ children }) => <ol className="list-decimal list-inside mb-2 text-gray-800 break-words">{children}</ol>,
         }}
       >
-        {content}
+        {preprocessed}
       </ReactMarkdown>
     </div>
   );
 };
 
-// ==================== System Prompt untuk AI ====================
+// ==================== System Prompt untuk AI (diperkuat untuk LaTeX) ====================
 const ZAKAT_SYSTEM_PROMPT = `Anda adalah asisten AI ahli fiqih zakat. Tugas Anda menghitung zakat berdasarkan data yang diberikan pengguna dengan ketentuan syariah berikut:
 
 ## KETENTUAN ZAKAT
@@ -199,17 +219,20 @@ const ZAKAT_SYSTEM_PROMPT = `Anda adalah asisten AI ahli fiqih zakat. Tugas Anda
   - Kambing/domba: nisab 40 ekor, haul 1 tahun. Zakat: 40-120 = 1 ekor, 121-200 = 2 ekor, 201-399 = 3 ekor, 400+ = setiap kelebihan 100 ekor +1 ekor.
   - Sapi: nisab 30 ekor, haul 1 tahun. Zakat: 30-39 = 1 ekor (umur 1 tahun), 40-59 = 1 ekor (umur 2 tahun), 60-69 = 2 ekor (umur 1 tahun), 70-79 = 2 ekor (1 ekor umur 1 thn + 1 ekor umur 2 thn), 80+ = setiap kelebihan 30 ekor +1 ekor.
 
-## FORMAT RESPONS
+## FORMAT RESPONS (WAJIB DIIKUTI)
 Berikan hasil perhitungan dalam bahasa Indonesia yang jelas, dengan rincian:
 - Nisab yang digunakan
 - Apakah wajib zakat atau belum
 - Jumlah zakat yang harus dibayar (dalam rupiah untuk zakat mal, atau jumlah hewan/beras untuk zakat fitrah/peternakan/pertanian)
 - Catatan perhitungan singkat
 
-**WAJIB menggunakan format LaTeX untuk rumus matematika**, contoh:
-- Untuk zakat pertanian: $$ \\text{Zakat (kg)} = 0.10 \\times \\text{hasil panen (kg)} $$
-- Untuk zakat maal: $$ \\text{Zakat (Rp)} = 0.025 \\times \\text{total harta (Rp)} $$
-- Sertakan rumus dalam blok \$\$ ... \$\$ agar tampil rapi.
+**WAJIB menggunakan format LaTeX untuk semua rumus matematika dengan diapit oleh $$ ... $$ (display math) atau $ ... $ (inline math).** 
+Contoh yang benar:
+- $$ \\text{Zakat (kg)} = 0.10 \\times \\text{hasil panen (kg)} $$
+- $$ \\text{Zakat (Rp)} = 0.025 \\times \\text{total harta (Rp)} $$
+
+**DILARANG menggunakan tanda kurung siku [ ] atau backticks untuk menulis rumus.** 
+**DILARANG menulis rumus tanpa pembatas LaTeX.**
 
 Sertakan disclaimer bahwa ini adalah bantuan AI dan sebaiknya dikonfirmasi ke amil zakat.
 JANGAN memberikan tautan eksternal. JANGAN gunakan markdown berlebihan selain untuk rumus.`;
@@ -416,7 +439,7 @@ export default function KalkulatorZakat() {
             </button>
           </div>
 
-          {/* Hasil AI dirender dengan Markdown + LaTeX */}
+          {/* Hasil AI dirender dengan Markdown + LaTeX (dengan preprocessing) */}
           {isLoading && (
             <div className="mt-6 p-5 bg-emerald-50 rounded-lg border border-emerald-200 overflow-x-auto">
               <div className="flex items-center justify-center gap-2 text-emerald-700"><FaSpinner className="animate-spin" /> AI sedang memproses...</div>

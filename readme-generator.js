@@ -1,5 +1,5 @@
 // readme-generator.js
-// Script untuk menghasilkan README.md secara dinamis dengan data terbaru dari GitHub dan screenshot lokal.
+// Script untuk menghasilkan README.md secara dinamis dengan data terbaru dari GitHub dan screenshot.
 
 import fs from 'fs/promises';
 import path from 'path';
@@ -7,16 +7,18 @@ import { fileURLToPath } from 'url';
 
 // ==================== KONFIGURASI ====================
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_OWNER = 'OmniCore-BEST';     
+const REPO_OWNER = 'OmniCore-BEST';
 const REPO_NAME = 'quranku';
 const GITHUB_API = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`;
 const PACKAGE_JSON_PATH = path.join(__dirname, 'package.json');
-const SCREENSHOT_DIR = path.join(__dirname, 'public', 'asset', 'screenshot');
 
-// Ekstensi gambar yang didukung
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
+// Screenshot URL (langsung dari hosting)
+const SCREENSHOTS = [
+  { url: 'https://quranku.devnova.icu/screenshots/screenshot1.png', label: 'Halaman Utama' },
+  { url: 'https://quranku.devnova.icu/screenshots/screenshot2.png', label: 'Detail Surah & Ayat' }
+];
 
-// Fungsi untuk mengambil data dari GitHub API
+// ==================== FUNGSI PENGAMBIL DATA ====================
 async function fetchGitHubData() {
   try {
     const headers = {};
@@ -42,15 +44,14 @@ async function fetchGitHubData() {
   } catch (error) {
     console.warn('Gagal mengambil data GitHub, menggunakan nilai default.', error.message);
     return {
-      stars: '0',
-      forks: '0',
+      stars: 0,
+      forks: 0,
       contributors: [],
       description: 'Aplikasi Al-Qur\'an Digital Lengkap dengan Doa, Tajwid, Hadis & Jadwal Sholat',
     };
   }
 }
 
-// Fungsi untuk membaca package.json
 async function getPackageInfo() {
   try {
     const pkg = JSON.parse(await fs.readFile(PACKAGE_JSON_PATH, 'utf-8'));
@@ -64,100 +65,39 @@ async function getPackageInfo() {
   }
 }
 
-// Fungsi untuk mendapatkan daftar screenshot
-async function getScreenshots() {
-  try {
-    const files = await fs.readdir(SCREENSHOT_DIR);
-    const screenshotFiles = files.filter(file => 
-      IMAGE_EXTENSIONS.includes(path.extname(file).toLowerCase())
-    ).sort();
-    
-    return screenshotFiles.map(file => ({
-      name: path.basename(file, path.extname(file)),
-      file: file,
-      path: `public/asset/screenshot/${file}` // path relatif dari root repo
-    }));
-  } catch (error) {
-    // Jika folder tidak ada atau error, kembalikan array kosong
-    console.warn('Folder screenshot tidak ditemukan atau tidak dapat dibaca.', error.message);
-    return [];
-  }
-}
-
-// Fungsi utama pembuatan README
+// ==================== GENERATOR README ====================
 async function generateREADME() {
-  const [github, pkg, screenshots] = await Promise.all([
-    fetchGitHubData(), 
-    getPackageInfo(),
-    getScreenshots()
-  ]);
-  
+  const [github, pkg] = await Promise.all([fetchGitHubData(), getPackageInfo()]);
+
   const stars = github.stars;
   const forks = github.forks;
-  const contributorsList = github.contributors.map(login => `@${login}`).join(', ') || 'Belum ada kontributor';
   const description = pkg.description || github.description || 'Aplikasi Al-Qur\'an Digital Lengkap dengan Doa, Tajwid, Hadis & Jadwal Sholat';
 
-  // Buat bagian screenshot
-  let screenshotSection = '';
-  if (screenshots.length > 0) {
-    // Buat grid 2 kolom dengan HTML
-    const rows = [];
-    for (let i = 0; i < screenshots.length; i += 2) {
-      const rowImages = screenshots.slice(i, i + 2);
-      const cols = rowImages.map(img => 
-        `<td align="center" width="50%">\n` +
-        `  <img src="${img.path}" alt="${img.name}" width="100%" style="max-width:300px; border-radius:8px; box-shadow:0 4px 8px rgba(0,0,0,0.1);">\n` +
-        `  <br><sub>${img.name.replace(/-|_/g, ' ')}</sub>\n` +
-        `</td>`
-      ).join('\n');
-      
-      // Jika hanya satu gambar di baris terakhir, tambahkan kolom kosong
-      if (rowImages.length === 1) {
-        rows.push(`<tr>\n${cols}\n<td></td>\n</tr>`);
-      } else {
-        rows.push(`<tr>\n${cols}\n</tr>`);
-      }
-    }
-    
-    screenshotSection = `
-## 📸 Tampilan Aplikasi
+  // Bagian screenshot menggunakan markdown tabel sederhana
+  const screenshotSection = `
+## 📱 Tampilan Aplikasi
 
-<div align="center">
-  <table>
-    ${rows.join('\n    ')}
-  </table>
-</div>
-
+| Halaman Utama | Detail Surah & Ayat |
+|:---:|:---:|
+| <img src="${SCREENSHOTS[0].url}" alt="Halaman Utama" width="100%" style="max-width:300px;"> | <img src="${SCREENSHOTS[1].url}" alt="Detail Surah" width="100%" style="max-width:300px;"> |
 `;
-  } else {
-    screenshotSection = `
-## 📸 Tampilan Aplikasi
-
-> _Tangkapan layar akan segera ditambahkan._
-
-| Halaman Utama | Detail Surah | Doa | Jadwal Sholat |
-|---------------|--------------|-----|---------------|
-| (coming soon) | (coming soon) | (coming soon) | (coming soon) |
-
-`;
-  }
 
   const readmeContent = `<!-- README.md dibuat secara otomatis oleh readme-generator.js -->
 <div align="center">
   <img src="https://quranku.devnova.icu/icons/icon-512x512.png" width="96" height="96" alt="quranku Logo">
   <h1>quranku</h1>
   <p><strong>${description}</strong></p>
-  <p>Baca, dengarkan, pelajari, dan hafalkan Al-Qur'an dengan mudah. Offline-ready dan modern.</p>
+  <p>Modern Quran App with Offline Support & Complete Islamic Tools</p>
 </div>
 
 <div align="center">
-  <!-- Badges dinamis dari GitHub -->
+  <!-- GitHub Badges -->
   <img src="https://img.shields.io/github/stars/${REPO_OWNER}/${REPO_NAME}?style=for-the-badge&logo=github&color=10b981" alt="GitHub stars">
   <img src="https://img.shields.io/github/forks/${REPO_OWNER}/${REPO_NAME}?style=for-the-badge&logo=github&color=3b82f6" alt="GitHub forks">
   <img src="https://img.shields.io/github/license/${REPO_OWNER}/${REPO_NAME}?style=for-the-badge&logo=open-source-initiative&color=f59e0b" alt="License">
   <img src="https://img.shields.io/github/commit-activity/m/${REPO_OWNER}/${REPO_NAME}?style=for-the-badge&logo=git&color=ef4444" alt="Commit activity">
   <br>
-  <img src="https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js" alt="Next.js">
+  <img src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js" alt="Next.js">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind">
   <img src="https://img.shields.io/badge/PWA-5A0FC8?style=for-the-badge&logo=pwa" alt="PWA">
@@ -166,162 +106,96 @@ async function generateREADME() {
 
 ---
 
-## 📱 Tentang quranku
+## ✨ Fitur Utama
 
-**quranku** adalah aplikasi web progresif (PWA) yang dirancang untuk membantu umat Islam membaca, mempelajari, dan menghafal Al-Qur'an dengan nyaman. Dilengkapi dengan berbagai fitur lengkap seperti:
-
-- **Al-Qur'an** dengan teks Arab, Latin, terjemahan Indonesia, audio murattal, dan tafsir.
-- **Doa Harian** dari hadis shahih, lengkap dengan arab, latin, arti, dan keterangan.
-- **Ilmu Tajwid** interaktif dengan contoh dan penjelasan mendetail.
-- **Kumpulan Hadis** dari kitab-kitab utama (Bukhari, Muslim, dll.) dengan terjemahan.
-- **Jadwal Sholat** untuk seluruh Indonesia (offline cache).
-- **Mode Offline** – data Al-Qur'an, hadis, dan jadwal sholat dapat disimpan untuk akses tanpa internet.
-- **PWA** – install sebagai aplikasi native di ponsel.
-- **Bookmark & Progress Baca** – tandai ayat terakhir baca.
-- **Sharing** – bagikan ayat atau doa ke media sosial.
+- **📖 Al-Qur'an Digital** – 114 surah lengkap dengan terjemahan Indonesia, tafsir per ayat, dan audio murattal.
+- **🤲 Doa Harian** – Kumpulan doa berdasarkan hadis shahih, lengkap dengan Arab, latin, dan arti.
+- **📚 Ilmu Tajwid** – Penjelasan 7 kategori hukum bacaan disertai contoh.
+- **📜 Kumpulan Hadis** – 9 kitab utama (Bukhari, Muslim, Abu Dawud, Tirmidzi, Nasai, Ibnu Majah, Ahmad, Malik, Darimi) dengan terjemahan.
+- **🕌 Jadwal Sholat** – Seluruh provinsi dan kabupaten/kota di Indonesia, mendukung mode offline.
+- **🧮 Kalkulator Zakat** – Hitung berbagai jenis zakat (fitrah, maal, penghasilan, emas, perdagangan, pertanian, peternakan).
+- **📴 Mode Offline** – Data Al-Qur'an, hadis, dan jadwal sholat dapat disimpan ke IndexedDB.
+- **📲 PWA** – Instal ke home screen untuk pengalaman seperti aplikasi native.
+- **🔖 Bookmark & Progress** – Simpan ayat terakhir yang dibaca.
 
 ---
 
-## ✨ Fitur Unggulan
+## 🛠️ Teknologi
 
-<div align="center">
-  <table>
-    <tr>
-      <td align="center" width="25%">
-        <span style="font-size: 2.5rem;">📖</span><br>
-        <b>Al-Qur'an Digital</b><br>
-        <small>114 surah + tafsir</small>
-      </td>
-      <td align="center" width="25%">
-        <span style="font-size: 2.5rem;">🤲</span><br>
-        <b>Doa Harian</b><br>
-        <small>100+ doa pilihan</small>
-      </td>
-      <td align="center" width="25%">
-        <span style="font-size: 2.5rem;">📚</span><br>
-        <b>Tajwid</b><br>
-        <small>lengkap + contoh</small>
-      </td>
-      <td align="center" width="25%">
-        <span style="font-size: 2.5rem;">📜</span><br>
-        <b>Hadis</b><br>
-        <small>9 kitab utama</small>
-      </td>
-    </tr>
-    <tr>
-      <td align="center">
-        <span style="font-size: 2.5rem;">🕌</span><br>
-        <b>Jadwal Sholat</b><br>
-        <small>seluruh Indonesia</small>
-      </td>
-      <td align="center">
-        <span style="font-size: 2.5rem;">📴</span><br>
-        <b>Offline Mode</b><br>
-        <small>simpan data</small>
-      </td>
-      <td align="center">
-        <span style="font-size: 2.5rem;">🔊</span><br>
-        <b>Audio Murattal</b><br>
-        <small>beberapa qari</small>
-      </td>
-      <td align="center">
-        <span style="font-size: 2.5rem;">📲</span><br>
-        <b>PWA</b><br>
-        <small>install ke home</small>
-      </td>
-    </tr>
-  </table>
-</div>
-
----
-
-## 🚀 Teknologi yang Digunakan
-
-- **Frontend**: Next.js 15 (App Router), React 19, TypeScript
-- **Styling**: Tailwind CSS, Framer Motion (animasi)
-- **State & Cache**: Dexie (IndexedDB), localStorage
-- **PWA & Offline**: Service Worker (workbox-style manual)
-- **Ikon**: React Icons, Heroicons
-- **API**:
-  - Al-Qur'an & Doa: \`api.devnova.icu\`
-  - Hadis: \`api.hadith.gading.dev\`
-  - Jadwal Sholat: \`equran.id/api/v2/shalat\`
-- **Deployment**: Vercel / static hosting
+| Area | Teknologi |
+|------|-----------|
+| Frontend | Next.js 16 (App Router), React 19, TypeScript |
+| Styling | Tailwind CSS, Framer Motion |
+| Database & Cache | Dexie (IndexedDB), localStorage |
+| PWA & Offline | Service Worker (manual) dengan strategi stale-while-revalidate |
+| External APIs | [api.devnova.icu](https://api.devnova.icu) (Quran/Doa), [api.hadith.gading.dev](https://api.hadith.gading.dev) (Hadis), [equran.id](https://equran.id) (Jadwal Sholat) |
 
 ---
 
 ${screenshotSection}
 
-## 🛠️ Instalasi & Menjalankan Secara Lokal
+## 🚀 Memulai
+
+### Prasyarat
+- Node.js 18+ atau 20+
+- pnpm / npm / yarn
+
+### Instalasi
 
 \`\`\`bash
-# 1. Clone repositori
+# Clone repositori
 git clone https://github.com/${REPO_OWNER}/${REPO_NAME}.git
 cd ${REPO_NAME}
 
-# 2. Install dependencies (gunakan pnpm atau npm)
-pnpm install
-# atau
-npm install
+# Install dependencies
+npm i  # atau npm install
 
-# 3. Jalankan development server
-pnpm dev
-# atau
-npm run dev
+# Jalankan development server
+npm run dev      # atau npm run dev
 
-# 4. Buka http://localhost:3000
+# Buka http://localhost:3000
 \`\`\`
 
-### 📦 Build untuk produksi
+### Build untuk produksi
 
 \`\`\`bash
-pnpm build
-pnpm start
+npm run build
+npm run start
 \`\`\`
 
 ---
 
-## 🌍 Mode PWA (Offline First)
+## 🌍 Offline & PWA
 
-Aplikasi ini dirancang sebagai PWA dengan strategi caching:
-
-- **Static assets** (CSS, font, icon) di-cache saat install.
-- **API Al-Qur'an & Hadis** menggunakan stale-while-revalidate – data ditampilkan dari cache (jika ada) sambil diperbarui di latar belakang.
-- **Audio** disimpan di cache terpisah dengan mekanisme manual.
-- **IndexedDB** digunakan untuk menyimpan data terstruktur (surah, tafsir, hadis) agar bisa diakses offline.
-
-Fitur instalasi ke home screen tersedia (Android, iOS, desktop).
+- Service Worker aktif setelah pengguna pertama kali mengunjungi situs.
+- Data Quran, hadis, dan jadwal sholat disimpan di IndexedDB (Dexie).
+- Strategi caching: stale-while-revalidate untuk API, cache-first untuk aset statis.
+- Install app ke home screen (Android, iOS, desktop Chromium).
 
 ---
 
-## 🤝 Cara Berkontribusi
+## 🤝 Kontribusi
 
-Kami sangat terbuka terhadap kontribusi! Baik itu laporan bug, permintaan fitur, atau pull request.
+Kontribusi sangat kami hargai! Silakan laporkan *issue* atau ajukan *pull request*.
 
-1. **Fork** repositori ini.
-2. Buat branch baru: \`git checkout -b fitur-keren-anda\`
-3. Commit perubahan: \`git commit -m 'feat: tambah fitur X'\`
-4. Push ke branch: \`git push origin fitur-keren-anda\`
-5. Ajukan **Pull Request**.
+1. Fork repositori
+2. Buat branch baru (\`git checkout -b feature/amazing-feature\`)
+3. Commit perubahan (\`git commit -m 'Add some amazing feature'\`)
+4. Push ke branch (\`git push origin feature/amazing-feature\`)
+5. Buka Pull Request
 
-Pastikan untuk mengikuti konvensi penulisan kode yang sudah ada (ESLint, Prettier).
-
-### 📝 Panduan Kontribusi
-- Gunakan TypeScript.
-- Komentar kode dalam bahasa Inggris (opsional).
-- Fitur baru harus diuji secara manual.
-- Update README jika diperlukan.
+Pastikan kode mengikuti konvensi ESLint dan TypeScript.
 
 ---
 
-## 🧑‍💻 Pengembang
+## 👥 Pengembang
 
-Proyek ini dikelola oleh **${REPO_OWNER}** dan didukung oleh komunitas **OmniCore-BEST**.
+Proyek ini dikelola oleh **${REPO_OWNER}** dan didukung oleh komunitas.
 
-- **Pembuat**: [thiskey](https://github.com/devnovaa-id)
-- **GitHub**: [${REPO_OWNER}/${REPO_NAME}](https://github.com/${REPO_OWNER}/${REPO_NAME})
+- **Creator**: [thiskey](https://github.com/devnovaa-id)
+- **GitHub Repository**: [${REPO_OWNER}/${REPO_NAME}](https://github.com/${REPO_OWNER}/${REPO_NAME})
 
-Kontributor (terima kasih banyak!):
+Terima kasih kepada semua kontributor:
 
 <a href="https://github.com/${REPO_OWNER}/${REPO_NAME}/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=${REPO_OWNER}/${REPO_NAME}&max=12&columns=6" />
@@ -331,7 +205,7 @@ Kontributor (terima kasih banyak!):
 
 ## 📄 Lisensi
 
-Proyek ini dilisensikan di bawah **MIT License** – lihat file [LICENSE](https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/main/LICENSE) untuk detail.
+Distribusikan di bawah lisensi **MIT**. Lihat [LICENSE](https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/main/LICENSE) untuk informasi lebih lanjut.
 
 ---
 
@@ -339,17 +213,15 @@ Proyek ini dilisensikan di bawah **MIT License** – lihat file [LICENSE](https:
 
 - **Website**: [quranku.devnova.icu](https://quranku.devnova.icu)
 - **Email**: this.key@devnova.icu
-- **GitHub Issues**: [laporkan bug](https://github.com/${REPO_OWNER}/${REPO_NAME}/issues)
-- **Discussions**: [diskusi](https://github.com/${REPO_OWNER}/${REPO_NAME}/discussions)
+- **GitHub Issues**: [Bug / Feature Request](https://github.com/${REPO_OWNER}/${REPO_NAME}/issues)
 
 ---
 
 <div align="center">
-  <sub>Dibangun dengan ❤️ oleh <a href="https://github.com/${REPO_OWNER}">${REPO_OWNER}</a> untuk umat Islam di seluruh dunia.</sub>
+  <sub>Made with ❤️ by <a href="https://github.com/${REPO_OWNER}">${REPO_OWNER}</a> for the global Muslim community.</sub>
   <br>
-  <sub>Open source, gratis, dan akan terus dikembangkan.</sub>
-  <br>
-  <br>
+  <sub>Open source, forever free, and continuously improved.</sub>
+  <br><br>
   <a href="https://github.com/${REPO_OWNER}/${REPO_NAME}">
     <img src="https://img.shields.io/github/stars/${REPO_OWNER}/${REPO_NAME}?style=social" alt="Star">
   </a>
@@ -364,7 +236,7 @@ Proyek ini dilisensikan di bawah **MIT License** – lihat file [LICENSE](https:
   console.log('✅ README.md berhasil dibuat!');
 }
 
-// Jalankan fungsi utama
+// Jalankan
 generateREADME().catch(err => {
   console.error('❌ Gagal membuat README:', err);
   process.exit(1);
