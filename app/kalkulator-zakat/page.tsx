@@ -139,46 +139,48 @@ const NumberInput = ({
   );
 };
 
-// ==================== Komponen Markdown dengan LaTeX ====================
+// ==================== Komponen Markdown dengan LaTeX (Responsif) ====================
 const ZakatMarkdown = ({ content }: { content: string }) => {
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
-      components={{
-        table: ({ children }) => (
-          <div className="overflow-x-auto my-2">
-            <table className="min-w-full border-collapse border border-gray-300 text-sm">
+    <div className="max-w-full overflow-x-auto">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          table: ({ children }) => (
+            <div className="overflow-x-auto my-2">
+              <table className="min-w-full border-collapse border border-gray-300 text-sm">
+                {children}
+              </table>
+            </div>
+          ),
+          th: ({ children }) => <th className="border border-gray-300 px-2 py-1 bg-gray-100 font-semibold break-words">{children}</th>,
+          td: ({ children }) => <td className="border border-gray-300 px-2 py-1 break-words">{children}</td>,
+          code: ({ className, children, ...props }) => {
+            const isInline = !className;
+            if (isInline) {
+              return <code className="bg-gray-100 px-1 rounded text-xs font-mono break-words" {...props}>{children}</code>;
+            }
+            return (
+              <pre className="bg-gray-100 p-2 rounded overflow-x-auto text-xs max-w-full">
+                <code className={`${className} break-words`} {...props}>{children}</code>
+              </pre>
+            );
+          },
+          a: ({ href, children }) => (
+            <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-words">
               {children}
-            </table>
-          </div>
-        ),
-        th: ({ children }) => <th className="border border-gray-300 px-2 py-1 bg-gray-100 font-semibold">{children}</th>,
-        td: ({ children }) => <td className="border border-gray-300 px-2 py-1">{children}</td>,
-        code: ({ className, children, ...props }: any) => {
-          const isInline = !className;
-          if (isInline) {
-            return <code className="bg-gray-100 px-1 rounded text-xs font-mono" {...props}>{children}</code>;
-          }
-          return (
-            <pre className="bg-gray-100 p-2 rounded overflow-x-auto text-xs">
-              <code className={className} {...props}>{children}</code>
-            </pre>
-          );
-        },
-        a: ({ href, children }) => (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-            {children}
-          </a>
-        ),
-        p: ({ children }) => <p className="mb-2 last:mb-0 text-gray-800">{children}</p>,
-        strong: ({ children }) => <strong className="font-bold text-emerald-800">{children}</strong>,
-        ul: ({ children }) => <ul className="list-disc list-inside mb-2 text-gray-800">{children}</ul>,
-        ol: ({ children }) => <ol className="list-decimal list-inside mb-2 text-gray-800">{children}</ol>,
-      }}
-    >
-      {content}
-    </ReactMarkdown>
+            </a>
+          ),
+          p: ({ children }) => <p className="mb-2 last:mb-0 text-gray-800 break-words">{children}</p>,
+          strong: ({ children }) => <strong className="font-bold text-emerald-800 break-words">{children}</strong>,
+          ul: ({ children }) => <ul className="list-disc list-inside mb-2 text-gray-800 break-words">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal list-inside mb-2 text-gray-800 break-words">{children}</ol>,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 };
 
@@ -416,24 +418,24 @@ export default function KalkulatorZakat() {
 
           {/* Hasil AI dirender dengan Markdown + LaTeX */}
           {isLoading && (
-            <div className="mt-6 p-5 bg-emerald-50 rounded-lg border border-emerald-200">
+            <div className="mt-6 p-5 bg-emerald-50 rounded-lg border border-emerald-200 overflow-x-auto">
               <div className="flex items-center justify-center gap-2 text-emerald-700"><FaSpinner className="animate-spin" /> AI sedang memproses...</div>
             </div>
           )}
           {aiResult && !isLoading && (
-            <div className="mt-6 p-5 bg-emerald-50 rounded-lg border border-emerald-200">
+            <div className="mt-6 p-5 bg-emerald-50 rounded-lg border border-emerald-200 overflow-x-auto">
               <ZakatMarkdown content={aiResult} />
               <div className="mt-4 flex items-start gap-2 text-xs text-amber-600 bg-amber-50 p-2 rounded-lg">
-                <FaExclamationTriangle className="w-4 h-4 mt-0.5" />
-                <span>Hasil ini dihasilkan oleh AI dan bersifat informatif. Konsultasikan dengan amil zakat terpercaya.</span>
+                <FaExclamationTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span className="break-words">Hasil ini dihasilkan oleh AI dan bersifat informatif. Konsultasikan dengan amil zakat terpercaya.</span>
               </div>
             </div>
           )}
-          {error && !isLoading && <div className="mt-6 p-5 bg-red-50 rounded-lg border border-red-200 text-red-700">{error}</div>}
+          {error && !isLoading && <div className="mt-6 p-5 bg-red-50 rounded-lg border border-red-200 text-red-700 overflow-x-auto">{error}</div>}
         </div>
 
         <div className="mt-8 text-center text-sm text-gray-500">
-          <p>Kalkulator ini menggunakan Quranku AI untuk menghitung zakat. Pastikan data yang dimasukkan akurat.</p>
+          <p className="break-words">Kalkulator ini menggunakan Quranku AI untuk menghitung zakat. Pastikan data yang dimasukkan akurat.</p>
         </div>
       </div>
     </div>
