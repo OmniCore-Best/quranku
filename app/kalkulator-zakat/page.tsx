@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { FaSpinner, FaExclamationTriangle } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { sendMessageWithFallback, OpenRouterMessage } from '@/lib/ai';
 
 // ==================== Tipe Data ====================
@@ -33,14 +36,12 @@ const RupiahInput = ({
   onChange,
   placeholder,
   min = 0,
-  step,
   ...props
 }: {
   value: number;
   onChange: (val: number) => void;
   placeholder?: string;
   min?: number;
-  step?: number;
   [key: string]: any;
 }) => {
   const [displayValue, setDisplayValue] = useState('');
@@ -84,7 +85,7 @@ const RupiahInput = ({
   );
 };
 
-// ==================== Komponen Input Number Biasa (tanpa format, untuk berat/jumlah) ====================
+// ==================== Komponen Input Number Biasa ====================
 const NumberInput = ({
   value,
   onChange,
@@ -138,11 +139,12 @@ const NumberInput = ({
   );
 };
 
-// ==================== Komponen Markdown untuk Hasil AI ====================
+// ==================== Komponen Markdown dengan LaTeX ====================
 const ZakatMarkdown = ({ content }: { content: string }) => {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
       components={{
         table: ({ children }) => (
           <div className="overflow-x-auto my-2">
@@ -201,9 +203,14 @@ Berikan hasil perhitungan dalam bahasa Indonesia yang jelas, dengan rincian:
 - Apakah wajib zakat atau belum
 - Jumlah zakat yang harus dibayar (dalam rupiah untuk zakat mal, atau jumlah hewan/beras untuk zakat fitrah/peternakan/pertanian)
 - Catatan perhitungan singkat
-Sertakan disclaimer bahwa ini adalah bantuan AI dan sebaiknya dikonfirmasi ke amil zakat.
 
-JANGAN memberikan tautan eksternal. Gunakan markdown secukupnya (tabel, list, bold).`;
+**WAJIB menggunakan format LaTeX untuk rumus matematika**, contoh:
+- Untuk zakat pertanian: $$ \\text{Zakat (kg)} = 0.10 \\times \\text{hasil panen (kg)} $$
+- Untuk zakat maal: $$ \\text{Zakat (Rp)} = 0.025 \\times \\text{total harta (Rp)} $$
+- Sertakan rumus dalam blok \$\$ ... \$\$ agar tampil rapi.
+
+Sertakan disclaimer bahwa ini adalah bantuan AI dan sebaiknya dikonfirmasi ke amil zakat.
+JANGAN memberikan tautan eksternal. JANGAN gunakan markdown berlebihan selain untuk rumus.`;
 
 // ==================== Komponen Utama ====================
 export default function KalkulatorZakat() {
@@ -407,7 +414,7 @@ export default function KalkulatorZakat() {
             </button>
           </div>
 
-          {/* Hasil AI dirender dengan Markdown */}
+          {/* Hasil AI dirender dengan Markdown + LaTeX */}
           {isLoading && (
             <div className="mt-6 p-5 bg-emerald-50 rounded-lg border border-emerald-200">
               <div className="flex items-center justify-center gap-2 text-emerald-700"><FaSpinner className="animate-spin" /> AI sedang memproses...</div>

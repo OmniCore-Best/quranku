@@ -20,6 +20,7 @@
     "framer-motion": "^12.26.0",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
+    "katex": "^0.16.45",
     "next": "^16.1.1",
     "node-addon-api": "^8.5.0",
     "react": "19.2.0",
@@ -28,7 +29,9 @@
     "react-markdown": "^10.1.0",
     "react-share": "^5.2.2",
     "react-swipeable": "^7.0.2",
+    "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "sonner": "^2.0.7",
     "web-push": "^3.6.7"
   },
