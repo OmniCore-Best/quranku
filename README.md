@@ -1,136 +1,153 @@
+<!-- README.md dibuat secara otomatis oleh readme-generator.js -->
 <div align="center">
-
-<img src="https://quranku.devnova.icu/icons/icon-512x512.png" width="96" height="96" alt="icon">
-
-# quranku
-
-### Digital Revolution in Reading & Understanding the Quran
-
-**Modern • Open Source • Community-Driven Quran Platform**
-
-Building a beautiful and accessible Quran experience through open collaboration.
-
+  <img src="https://quranku.devnova.icu/icons/icon-512x512.png" width="96" height="96" alt="quranku Logo">
+  <h1>quranku</h1>
+  <p><strong>Aplikasi Al-Qur'an Digital Lengkap dengan Doa, Tajwid, Hadis & Jadwal Sholat</strong></p>
+  <p>Modern Quran App with Offline Support & Complete Islamic Tools</p>
 </div>
 
 <div align="center">
-
-<img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" />
-<img src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white" />
-<img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" />
-<img src="https://img.shields.io/badge/Tailwind-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" />
-
+  <!-- GitHub Badges -->
+  <img src="https://img.shields.io/github/stars/OmniCore-BEST/quranku?style=for-the-badge&logo=github&color=10b981" alt="GitHub stars">
+  <img src="https://img.shields.io/github/forks/OmniCore-BEST/quranku?style=for-the-badge&logo=github&color=3b82f6" alt="GitHub forks">
+  <img src="https://img.shields.io/github/license/OmniCore-BEST/quranku?style=for-the-badge&logo=open-source-initiative&color=f59e0b" alt="License">
+  <img src="https://img.shields.io/github/commit-activity/m/OmniCore-BEST/quranku?style=for-the-badge&logo=git&color=ef4444" alt="Commit activity">
+  <br>
+  <img src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js" alt="Next.js">
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind">
+  <img src="https://img.shields.io/badge/PWA-5A0FC8?style=for-the-badge&logo=pwa" alt="PWA">
+  <img src="https://img.shields.io/badge/IndexedDB-Dexie-0080ff?style=for-the-badge&logo=indexeddb" alt="IndexedDB">
 </div>
 
-<div align="center">
+---
 
-<img src="https://img.shields.io/github/stars/OmniCore-Best/quranku?style=flat-square&color=10B981&label=Stars" />
-<img src="https://img.shields.io/github/forks/OmniCore-Best/quranku?style=flat-square&color=6366F1&label=Forks" />
-<img src="https://img.shields.io/github/contributors/OmniCore-Best/quranku?style=flat-square&color=F59E0B&label=Contributors" />
-<img src="https://img.shields.io/github/license/OmniCore-Best/quranku?style=flat-square&color=EF4444&label=License" />
+## ✨ Fitur Utama
 
-</div>
+- **📖 Al-Qur'an Digital** – 114 surah lengkap dengan terjemahan Indonesia, tafsir per ayat, dan audio murattal.
+- **🤲 Doa Harian** – Kumpulan doa berdasarkan hadis shahih, lengkap dengan Arab, latin, dan arti.
+- **📚 Ilmu Tajwid** – Penjelasan 7 kategori hukum bacaan disertai contoh.
+- **📜 Kumpulan Hadis** – 9 kitab utama (Bukhari, Muslim, Abu Dawud, Tirmidzi, Nasai, Ibnu Majah, Ahmad, Malik, Darimi) dengan terjemahan.
+- **🕌 Jadwal Sholat** – Seluruh provinsi dan kabupaten/kota di Indonesia, mendukung mode offline.
+- **🧮 Kalkulator Zakat** – Hitung berbagai jenis zakat (fitrah, maal, penghasilan, emas, perdagangan, pertanian, peternakan).
+- **📴 Mode Offline** – Data Al-Qur'an, hadis, dan jadwal sholat dapat disimpan ke IndexedDB.
+- **📲 PWA** – Instal ke home screen untuk pengalaman seperti aplikasi native.
+- **🔖 Bookmark & Progress** – Simpan ayat terakhir yang dibaca.
 
-<div align="center">
+---
 
-[🚀 Live Demo](#) • [📖 Documentation](#) • [🤝 Join Community](#) • [💬 Discussions](#)
+## 🛠️ Teknologi
 
-</div>
+| Area | Teknologi |
+|------|-----------|
+| Frontend | Next.js 16 (App Router), React 19, TypeScript |
+| Styling | Tailwind CSS, Framer Motion |
+| Database & Cache | Dexie (IndexedDB), localStorage |
+| PWA & Offline | Service Worker (manual) dengan strategi stale-while-revalidate |
+| External APIs | [api.devnova.icu](https://api.devnova.icu) (Quran/Doa), [api.hadith.gading.dev](https://api.hadith.gading.dev) (Hadis), [equran.id](https://equran.id) (Jadwal Sholat) |
 
-## 🌙 Vision & Mission
+---
 
-> *"Bringing ease in reading, understanding, and studying the Quran in the digital age through beautiful and accessible technology."*
 
-<div align="center">
+## 📱 Tampilan Aplikasi
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&duration=3000&pause=1000&color=10B981&center=true&vCenter=true&width=650&lines=Quran+for+Everyone;Built+with+Love+and+Sincerity;Open+Source+for+the+Ummah" />
+| Halaman Utama | Detail Surah & Ayat |
+|:---:|:---:|
+| <img src="https://quranku.devnova.icu/screenshots/screenshot1.png" alt="Halaman Utama" width="100%" style="max-width:300px;"> | <img src="https://quranku.devnova.icu/screenshots/screenshot2.png" alt="Detail Surah" width="100%" style="max-width:300px;"> |
 
-</div>
 
-## 🎯 Feature Highlights
+## 🚀 Memulai
 
-<div align="center">
+### Prasyarat
+- Node.js 18+ atau 20+
+- pnpm / npm / yarn
 
-<table>
-<tr>
-<td width="33%" align="center">
-
-### 🎨 Mushaf Display
-Madinah-style layout  
-Uthmani typography  
-Comfortable reading mode
-
-</td>
-<td width="33%" align="center">
-
-### 🔊 Audio & Tajweed
-Multiple reciters  
-Murattal playback  
-Future tajweed markers
-
-</td>
-<td width="33%" align="center">
-
-### 📚 Tafsir & Translation
-Multi-language support  
-Popular tafsir sources  
-Personal verse notes
-
-</td>
-</tr>
-</table>
-
-</div>
-
-## 🏗️ Architecture & Stack
-
-| Layer | Technology |
-|--------|-----------|
-| Framework | Next.js |
-| UI | React |
-| Language | TypeScript |
-| Styling | Tailwind CSS |
-| Platform | Web & PWA |
-
-## 🌟 Hall of Contributors
-
-<div align="center">
-
-<a href="https://github.com/OmniCore-Best/quranku/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=OmniCore-Best/quranku&max=12&columns=6&anon=1" />
-</a>
-
-<p>Your contribution puts your name on this wall.</p>
-
-</div>
-
-## 🤝 Contribution Flow
+### Instalasi
 
 ```bash
-git clone https://github.com/OmniCore-Best/quranku.git
-pnpm install
-pnpm dev
+# Clone repositori
+git clone https://github.com/OmniCore-BEST/quranku.git
+cd quranku
 
-git checkout -b feat/your-feature
-git commit -m "feat: add feature"
-git push origin feat/your-feature
-Open a Pull Request for review.
+# Install dependencies
+npm i  # atau npm install
+
+# Jalankan development server
+npm run dev      # atau pnpm dev
+
+# Buka http://localhost:3000
+```
+
+### Build untuk produksi
+
+```bash
+npm run build
+npm run start
 ```
 
 ---
 
-## 🧠 Community
+## 🌍 Offline & PWA
 
-Quranku is developed by the **OmniCore-BEST Community**, a group of developers focused on:
+- Service Worker aktif setelah pengguna pertama kali mengunjungi situs.
+- Data Quran, hadis, dan jadwal sholat disimpan di IndexedDB (Dexie).
+- Strategi caching: stale-while-revalidate untuk API, cache-first untuk aset statis.
+- Install app ke home screen (Android, iOS, desktop Chromium).
 
-- Open source collaboration
-- Real-world project experience
-- Building useful Islamic technology
+---
 
-Everyone is welcome to grow and build together.
+## 🤝 Kontribusi
+
+Kontribusi sangat kami hargai! Silakan laporkan *issue* atau ajukan *pull request*.
+
+1. Fork repositori
+2. Buat branch baru (`git checkout -b feature/amazing-feature`)
+3. Commit perubahan (`git commit -m 'Add some amazing feature'`)
+4. Push ke branch (`git push origin feature/amazing-feature`)
+5. Buka Pull Request
+
+Pastikan kode mengikuti konvensi ESLint dan TypeScript.
+
+---
+
+## 👥 Pengembang
+
+Proyek ini dikelola oleh **OmniCore-BEST** dan didukung oleh komunitas.
+
+- **Creator**: [thiskey](https://github.com/devnovaa-id)
+- **GitHub Repository**: [OmniCore-BEST/quranku](https://github.com/OmniCore-BEST/quranku)
+
+Terima kasih kepada semua kontributor:
+
+<a href="https://github.com/OmniCore-BEST/quranku/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=OmniCore-BEST/quranku&max=12&columns=6" />
+</a>
+
+---
+
+## 📄 Lisensi
+
+Distribusikan di bawah lisensi **MIT**. Lihat [LICENSE](https://github.com/OmniCore-BEST/quranku/blob/main/LICENSE) untuk informasi lebih lanjut.
+
+---
+
+## 📞 Kontak & Dukungan
+
+- **Website**: [quranku.devnova.icu](https://quranku.devnova.icu)
+- **Email**: this.key@devnova.icu
+- **GitHub Issues**: [Bug / Feature Request](https://github.com/OmniCore-BEST/quranku/issues)
+
+---
 
 <div align="center">
-
-**Built with ❤️ by OmniCore-BEST Community**  
-Open Source • For Knowledge • For the Ummah
-
+  <sub>Made with ❤️ by <a href="https://github.com/OmniCore-BEST">OmniCore-BEST</a> for the global Muslim community.</sub>
+  <br>
+  <sub>Open source, forever free, and continuously improved.</sub>
+  <br><br>
+  <a href="https://github.com/OmniCore-BEST/quranku">
+    <img src="https://img.shields.io/github/stars/OmniCore-BEST/quranku?style=social" alt="Star">
+  </a>
+  <a href="https://github.com/OmniCore-BEST/quranku/fork">
+    <img src="https://img.shields.io/github/forks/OmniCore-BEST/quranku?style=social" alt="Fork">
+  </a>
 </div>
