@@ -3,6 +3,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { RiRobot3Line } from "react-icons/ri";
 
 // Heroicons – Solid
 import {
@@ -47,9 +48,10 @@ const popupMenuItems: PopupItem[] = [
   },
   { 
     id: 4, 
-    name: 'Sejarah', 
-    icon: <DocumentTextIcon className="w-5 h-5" />, 
-    comingSoon: true 
+    name: 'Quranku AI', 
+    icon: <RiRobot3Line className="w-5 h-5" />, 
+    comingSoon: false,
+    href: '/quranku-ai'
   },
   { 
     id: 5, 
