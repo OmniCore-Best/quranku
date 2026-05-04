@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -35,7 +35,7 @@ interface SearchResult {
 }
 
 // ----------------------------------------------------------------------
-// System prompt untuk LLM
+// System prompt untuk LLM (disalin dari file asli, pastikan isi lengkap)
 // ----------------------------------------------------------------------
 const QURANKU_SYSTEM_PROMPT = `Anda adalah asisten AI cerdas yang bernama Quranku AI yang di buat oleh this key dari tim pengembang DevNova-ID untuk aplikasi quranku (https://quranku.devnova.icu).  
 Anda memiliki akses penuh ke semua fitur aplikasi. Tugas Anda membantu pengguna dengan informasi akurat.
@@ -58,83 +58,73 @@ Anda memiliki akses penuh ke semua fitur aplikasi. Tugas Anda membantu pengguna 
 // ----------------------------------------------------------------------
 // Komponen untuk render Markdown + LaTeX + tabel + navigasi internal
 // ----------------------------------------------------------------------
-const MarkdownContent = ({ content, onNavigate }: { content: string; onNavigate: (href: string) => void }) => {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
-      components={{
-        // Tabel responsif dengan overflow-x
-        table: ({ children }) => (
-          <div className="overflow-x-auto my-3">
-            <table className="min-w-full border-collapse border border-gray-300 text-sm">
-              {children}
-            </table>
-          </div>
-        ),
-        th: ({ children }) => (
-          <th className="border border-gray-300 px-3 py-2 bg-gray-100 font-semibold text-left">
+const MarkdownContent = ({ content, onNavigate }: { content: string; onNavigate: (href: string) => void }) => (
+  <ReactMarkdown
+    remarkPlugins={[remarkGfm, remarkMath]}
+    rehypePlugins={[rehypeKatex]}
+    components={{
+      table: ({ children }) => (
+        <div className="overflow-x-auto my-3">
+          <table className="min-w-full border-collapse border border-gray-300 text-sm">
             {children}
-          </th>
-        ),
-        td: ({ children }) => (
-          <td className="border border-gray-300 px-3 py-2">
+          </table>
+        </div>
+      ),
+      th: ({ children }) => (
+        <th className="border border-gray-300 px-3 py-2 bg-gray-100 font-semibold text-left">
+          {children}
+        </th>
+      ),
+      td: ({ children }) => (
+        <td className="border border-gray-300 px-3 py-2">
+          {children}
+        </td>
+      ),
+      code: ({ className, children, inline, ...props }: any) => {
+        if (!inline) {
+          return (
+            <pre className="bg-gray-100 p-3 rounded-lg overflow-x-auto text-xs my-2">
+              <code className={className} {...props}>
+                {children}
+              </code>
+            </pre>
+          );
+        }
+        return (
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
             {children}
-          </td>
-        ),
-        // Kode inline dan block
-        code: ({ className, children, inline, ...props }: any) => {
-          const match = /language-(\w+)/.exec(className || '');
-          if (!inline && match) {
-            return (
-              <pre className="bg-gray-100 p-3 rounded-lg overflow-x-auto text-xs my-2">
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              </pre>
-            );
-          }
-          return (
-            <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
-              {children}
-            </code>
-          );
-        },
-        // Navigasi internal untuk tautan Quranku
-        a: ({ href, children }) => {
-          if (!href) return <span>{children}</span>;
-          const handleClick = (e: React.MouseEvent) => {
-            e.preventDefault();
-            onNavigate(href);
-          };
-          return (
-            <a
-              href={href}
-              onClick={handleClick}
-              className="text-blue-600 underline font-medium hover:text-blue-800"
-            >
-              {children}
-            </a>
-          );
-        },
-        p: ({ children }) => <p className="mb-2 last:mb-0 text-sm leading-relaxed">{children}</p>,
-        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-        ul: ({ children }) => <ul className="list-disc list-inside mb-2">{children}</ul>,
-        ol: ({ children }) => <ol className="list-decimal list-inside mb-2">{children}</ol>,
-      }}
-    >
-      {content}
-    </ReactMarkdown>
-  );
-};
+          </code>
+        );
+      },
+      a: ({ href, children }) => {
+        if (!href) return <span>{children}</span>;
+        return (
+          <a
+            href={href}
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate(href);
+            }}
+            className="text-blue-600 underline font-medium hover:text-blue-800"
+          >
+            {children}
+          </a>
+        );
+      },
+      p: ({ children }) => <p className="mb-2 last:mb-0 text-sm leading-relaxed">{children}</p>,
+    }}
+  >
+    {content}
+  </ReactMarkdown>
+);
 
 // ----------------------------------------------------------------------
-// Komponen utama halaman Quranku AI
+// Komponen utama halaman
 // ----------------------------------------------------------------------
 export default function QurankuAIPage() {
   const router = useRouter();
 
-  // --- State untuk Chat ---
+  // State untuk chat
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -143,10 +133,10 @@ export default function QurankuAIPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const STORAGE_KEY = 'quranku_ai_chat_history';
 
-  // --- Mode: 'chat' atau 'semantic' ---
+  // Mode: 'chat' atau 'semantic'
   const [mode, setMode] = useState<'chat' | 'semantic'>('chat');
 
-  // --- State untuk Semantic Search ---
+  // State untuk semantic search
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -157,7 +147,7 @@ export default function QurankuAIPage() {
   const [searchMinScore] = useState(0.4);
 
   // ----------------------------------------------------------------------
-  // Helper: pesan selamat datang untuk chat
+  // Helper: pesan selamat datang (disimpan untuk mengurangi duplikasi)
   // ----------------------------------------------------------------------
   const getWelcomeMessage = (): ChatMessage => ({
     id: 'welcome',
@@ -172,7 +162,7 @@ export default function QurankuAIPage() {
   });
 
   // ----------------------------------------------------------------------
-  // Load chat history dari localStorage
+  // Load & simpan riwayat chat ke localStorage
   // ----------------------------------------------------------------------
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -184,8 +174,7 @@ export default function QurankuAIPage() {
           timestamp: new Date(msg.timestamp),
         }));
         setMessages(withDates);
-      } catch (e) {
-        console.error('Gagal memuat riwayat chat', e);
+      } catch {
         setMessages([getWelcomeMessage()]);
       }
     } else {
@@ -193,14 +182,13 @@ export default function QurankuAIPage() {
     }
   }, []);
 
-  // Simpan chat history hanya ketika mode chat aktif
   useEffect(() => {
     if (messages.length > 0 && mode === 'chat') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
     }
   }, [messages, mode]);
 
-  // Auto-focus input & scroll ke bawah saat mode berubah
+  // Fokus ke input dan scroll ke bawah saat mode berubah
   useEffect(() => {
     if (mode === 'chat') {
       inputRef.current?.focus();
@@ -217,12 +205,10 @@ export default function QurankuAIPage() {
     setMessages([getWelcomeMessage()]);
     localStorage.removeItem(STORAGE_KEY);
   };
-
   const startNewChat = () => {
     setMessages([getWelcomeMessage()]);
     localStorage.removeItem(STORAGE_KEY);
   };
-
   const handleNavigate = (href: string) => router.push(href);
 
   const sendChatMessage = async () => {
@@ -234,35 +220,40 @@ export default function QurankuAIPage() {
       content: input,
       timestamp: new Date(),
     };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages((prev) => [...prev, userMsg]);
     const currentInput = input;
     setInput('');
     setIsLoading(true);
 
     const apiMessages: OpenRouterMessage[] = [
       { role: 'system', content: QURANKU_SYSTEM_PROMPT },
-      ...messages.map(m => ({ role: m.role, content: m.content })),
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
       { role: 'user', content: currentInput },
     ];
 
     try {
       const result = await sendMessageWithFallback(apiMessages, true);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: result.content,
-        timestamp: new Date(),
-        provider: result.provider,
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: result.content,
+          timestamp: new Date(),
+          provider: result.provider,
+        },
+      ]);
       setStatus(result.status);
-    } catch (error) {
-      console.error('Error saat memanggil AI:', error);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Maaf, layanan AI sedang sibuk. Silakan coba lagi nanti.',
-        timestamp: new Date(),
-      }]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: 'Maaf, layanan AI sedang sibuk. Silakan coba lagi nanti.',
+          timestamp: new Date(),
+        },
+      ]);
       setStatus('offline');
     } finally {
       setIsLoading(false);
@@ -270,7 +261,7 @@ export default function QurankuAIPage() {
   };
 
   // ----------------------------------------------------------------------
-  // Pencarian semantik (vector search) dengan API equran.id
+  // Pencarian semantik (vector) menggunakan API equran.id
   // ----------------------------------------------------------------------
   const performSemanticSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -301,14 +292,13 @@ export default function QurankuAIPage() {
   };
 
   // ----------------------------------------------------------------------
-  // Share hasil pencarian sebagai PNG dengan watermark (fix html-to-image)
+  // Fungsi capture PNG dengan watermark (buat blob dulu, lalu download/share)
   // ----------------------------------------------------------------------
-  const captureWithWatermark = async (element: HTMLElement): Promise<string> => {
-    // Clone elemen asli untuk menghindari modifikasi DOM
-    const original = element;
-    const clone = original.cloneNode(true) as HTMLElement;
+  const captureElementWithWatermark = async (element: HTMLElement): Promise<Blob> => {
+    // Clone elemen asli agar tidak mengganggu DOM asli
+    const clone = element.cloneNode(true) as HTMLElement;
 
-    // Reset gaya yang dapat mengganggu capture (backdrop-filter, transform, dll)
+    // Reset gaya yang mungkin mengganggu capture (glassmorphism, transform, dll)
     clone.style.position = 'relative';
     clone.style.backgroundColor = '#ffffff';
     clone.style.borderRadius = '16px';
@@ -316,23 +306,21 @@ export default function QurankuAIPage() {
     clone.style.boxShadow = 'none';
     clone.style.backdropFilter = 'none';
     clone.style.transform = 'none';
-    clone.style.width = `${original.offsetWidth}px`;
+    clone.style.width = `${element.offsetWidth}px`;
 
-    // Hapus efek blur/transform dari semua child
-    const allChildren = clone.querySelectorAll('*');
-    allChildren.forEach((el) => {
+    // Hapus backdrop-filter dan transform dari semua child
+    clone.querySelectorAll('*').forEach((el) => {
       const htmlEl = el as HTMLElement;
       if (htmlEl.style.backdropFilter) htmlEl.style.backdropFilter = 'none';
       if (htmlEl.style.transform) htmlEl.style.transform = 'none';
     });
 
     // Sembunyikan tombol interaktif pada clone (share, navigasi, dll)
-    const interactive = clone.querySelectorAll('button, [role="button"]');
-    interactive.forEach((btn) => {
+    clone.querySelectorAll('button, [role="button"]').forEach((btn) => {
       (btn as HTMLElement).style.display = 'none';
     });
 
-    // Tambahkan watermark
+    // Tambahkan watermark di pojok kanan bawah
     const watermark = document.createElement('div');
     watermark.textContent = '— generated by Quranku AI';
     watermark.style.position = 'absolute';
@@ -349,14 +337,16 @@ export default function QurankuAIPage() {
     watermark.style.pointerEvents = 'none';
     clone.appendChild(watermark);
 
-    // Capture dengan toPng
+    // Konversi ke PNG via html-to-image
     const dataUrl = await toPng(clone, {
       quality: 0.95,
       pixelRatio: 2,
       backgroundColor: '#ffffff',
       cacheBust: true,
     });
-    return dataUrl;
+    // Ubah dataURL menjadi Blob
+    const blob = await fetch(dataUrl).then((res) => res.blob());
+    return blob;
   };
 
   const handleShareResult = async (elementId: string, title: string) => {
@@ -365,31 +355,44 @@ export default function QurankuAIPage() {
       console.error('Element tidak ditemukan:', elementId);
       return;
     }
+
     setSharingId(elementId);
     try {
-      const dataUrl = await captureWithWatermark(element);
+      // 1. Buat gambar terlebih dahulu (Blob)
+      const imageBlob = await captureElementWithWatermark(element);
       const fileName = `quranku_${title.replace(/[^a-z0-9]/gi, '_')}.png`;
+
+      // 2. Cek apakah bisa menggunakan Web Share API (mobile)
       if (navigator.share && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        const blob = await (await fetch(dataUrl)).blob();
-        const file = new File([blob], fileName, { type: 'image/png' });
-        await navigator.share({ files: [file], title: 'Quranku - Hasil Pencarian', text: title });
+        const file = new File([imageBlob], fileName, { type: 'image/png' });
+        await navigator.share({
+          files: [file],
+          title: 'Quranku - Hasil Pencarian',
+          text: title,
+        });
       } else {
+        // 3. Fallback: unduh langsung
+        const url = URL.createObjectURL(imageBlob);
         const link = document.createElement('a');
         link.download = fileName;
-        link.href = dataUrl;
+        link.href = url;
         link.click();
+        // Bersihkan URL object setelah download
+        setTimeout(() => URL.revokeObjectURL(url), 100);
       }
     } catch (error) {
-      console.error('Gagal share:', error);
-      // Fallback: coba download langsung
+      console.error('Gagal share atau download:', error);
+      // Fallback terakhir: coba unduh langsung dengan cara lain
       try {
-        const dataUrl = await captureWithWatermark(element);
+        const imageBlob = await captureElementWithWatermark(element);
+        const url = URL.createObjectURL(imageBlob);
         const link = document.createElement('a');
         link.download = `quranku_${title.replace(/[^a-z0-9]/gi, '_')}.png`;
-        link.href = dataUrl;
+        link.href = url;
         link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 100);
       } catch (fallbackErr) {
-        console.error('Fallback download error:', fallbackErr);
+        console.error('Fallback tetap gagal:', fallbackErr);
       }
     } finally {
       setSharingId(null);
@@ -397,35 +400,54 @@ export default function QurankuAIPage() {
   };
 
   // ----------------------------------------------------------------------
-  // Render kartu hasil pencarian semantik (ayat, tafsir, doa)
+  // Render kartu hasil semantic search (ayat, tafsir, doa)
   // ----------------------------------------------------------------------
   const renderSearchResultCard = (result: SearchResult, idx: number) => {
     const { tipe, skor, relevansi, data } = result;
     const scorePercent = Math.round(skor * 100);
     const relevansiColor =
-      relevansi === 'tinggi' ? 'bg-emerald-100 text-emerald-800' :
-      relevansi === 'sedang' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600';
+      relevansi === 'tinggi'
+        ? 'bg-emerald-100 text-emerald-800'
+        : relevansi === 'sedang'
+        ? 'bg-amber-100 text-amber-800'
+        : 'bg-gray-100 text-gray-600';
     const uniqueId = `${tipe}-${data.id_surat || data.nomor_ayat || idx}-${Date.now()}-${idx}`;
     const shareTitle = `${data.nama_surat || 'Hasil'} - ${tipe === 'ayat' ? `Ayat ${data.nomor_ayat}` : tipe}`;
 
     if (tipe === 'ayat') {
       return (
-        <div id={uniqueId} key={idx} className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-gray-100 relative">
+        <div
+          id={uniqueId}
+          key={idx}
+          className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-gray-100 relative"
+        >
           <button
             onClick={() => handleShareResult(uniqueId, shareTitle)}
             disabled={sharingId === uniqueId}
             className="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition disabled:opacity-50"
           >
-            {sharingId === uniqueId ? <FaSpinner className="animate-spin w-4 h-4" /> : <FaShareAlt className="w-4 h-4 text-gray-600" />}
+            {sharingId === uniqueId ? (
+              <FaSpinner className="animate-spin w-4 h-4" />
+            ) : (
+              <FaShareAlt className="w-4 h-4 text-gray-600" />
+            )}
           </button>
           <div className="flex items-center gap-2 mb-2 pr-10">
-            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">Ayat</span>
-            <span className="text-sm font-semibold">{data.nama_surat} · {data.nomor_ayat}</span>
-            <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${relevansiColor}`}>{relevansi} · {scorePercent}%</span>
+            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+              Ayat
+            </span>
+            <span className="text-sm font-semibold">
+              {data.nama_surat} · {data.nomor_ayat}
+            </span>
+            <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${relevansiColor}`}>
+              {relevansi} · {scorePercent}%
+            </span>
           </div>
           <div className="text-right font-arabic text-xl leading-loose mb-2">{data.teks_arab}</div>
           <div className="text-sm text-gray-600 italic mb-2">{data.teks_latin}</div>
-          <div className="text-sm text-gray-700 border-l-2 border-blue-400 pl-3">{data.terjemahan_id}</div>
+          <div className="text-sm text-gray-700 border-l-2 border-blue-400 pl-3">
+            {data.terjemahan_id}
+          </div>
           <button
             onClick={() => router.push(`/surah/${data.id_surat}?ayat=${data.nomor_ayat}`)}
             className="mt-3 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
@@ -435,20 +457,35 @@ export default function QurankuAIPage() {
         </div>
       );
     }
+
     if (tipe === 'tafsir') {
       return (
-        <div id={uniqueId} key={idx} className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-gray-100 relative">
+        <div
+          id={uniqueId}
+          key={idx}
+          className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-gray-100 relative"
+        >
           <button
             onClick={() => handleShareResult(uniqueId, shareTitle)}
             disabled={sharingId === uniqueId}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
           >
-            {sharingId === uniqueId ? <FaSpinner className="animate-spin w-4 h-4" /> : <FaShareAlt className="w-4 h-4 text-gray-600" />}
+            {sharingId === uniqueId ? (
+              <FaSpinner className="animate-spin w-4 h-4" />
+            ) : (
+              <FaShareAlt className="w-4 h-4 text-gray-600" />
+            )}
           </button>
           <div className="flex items-center gap-2 mb-2 pr-10">
-            <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full text-xs">Tafsir</span>
-            <span className="text-sm font-medium">{data.nama_surat} ayat {data.nomor_ayat}</span>
-            <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${relevansiColor}`}>{relevansi} · {scorePercent}%</span>
+            <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full text-xs">
+              Tafsir
+            </span>
+            <span className="text-sm font-medium">
+              {data.nama_surat} ayat {data.nomor_ayat}
+            </span>
+            <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${relevansiColor}`}>
+              {relevansi} · {scorePercent}%
+            </span>
           </div>
           <p className="text-sm text-gray-700 leading-relaxed line-clamp-3">{data.isi}</p>
           <button
@@ -460,30 +497,42 @@ export default function QurankuAIPage() {
         </div>
       );
     }
+
     if (tipe === 'doa') {
       return (
-        <div id={uniqueId} key={idx} className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-gray-100 relative">
+        <div
+          id={uniqueId}
+          key={idx}
+          className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-gray-100 relative"
+        >
           <button
             onClick={() => handleShareResult(uniqueId, shareTitle)}
             disabled={sharingId === uniqueId}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
           >
-            {sharingId === uniqueId ? <FaSpinner className="animate-spin w-4 h-4" /> : <FaShareAlt className="w-4 h-4 text-gray-600" />}
+            {sharingId === uniqueId ? (
+              <FaSpinner className="animate-spin w-4 h-4" />
+            ) : (
+              <FaShareAlt className="w-4 h-4 text-gray-600" />
+            )}
           </button>
           <div className="flex items-center gap-2 pr-10">
             <span className="font-bold text-sm">{data.nama_doa || 'Doa'}</span>
-            <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${relevansiColor}`}>{relevansi}</span>
+            <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${relevansiColor}`}>
+              {relevansi}
+            </span>
           </div>
           <div className="text-right font-arabic text-lg mt-2">{data.teks_arab}</div>
           <p className="text-sm text-gray-600 mt-2">{data.terjemahan}</p>
         </div>
       );
     }
+
     return null;
   };
 
   // ----------------------------------------------------------------------
-  // Handler untuk submit (chat atau semantic) dan toggle mode
+  // Handler submit & toggle mode
   // ----------------------------------------------------------------------
   const handleSubmit = () => {
     if (mode === 'chat') sendChatMessage();
@@ -505,23 +554,34 @@ export default function QurankuAIPage() {
   };
 
   // ----------------------------------------------------------------------
-  // Render UI utama (desain modern + padding bawah untuk BottomNav)
+  // Render UI utama
   // ----------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-[#F5F5F5] flex flex-col pb-20">
-      {/* Header: tinggi 56px, ikon menu & plus, logo */}
-      <div className="h-14 px-4 flex items-center justify-between bg-white border-b border-gray-100 sticky top-0 z-10">
+    <div className="min-h-screen bg-[#F5F5F5] flex flex-col">
+      {/* Header sticky */}
+      <div className="h-14 px-4 flex items-center justify-between bg-white border-b border-gray-100 sticky top-0 z-20">
         <button className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100">
           <FaBars className="w-5 h-5 text-gray-700" />
         </button>
         <div className="flex items-center gap-2">
-          <Image src="/icons/icon-512x512.png" alt="Quranku AI" width={28} height={28} className="rounded-full" />
+          <Image
+            src="/icons/icon-512x512.png"
+            alt="Quranku AI"
+            width={28}
+            height={28}
+            className="rounded-full"
+          />
           <h1 className="text-base font-semibold text-gray-800">Quranku AI</h1>
           {mode === 'chat' && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-              status === 'online' ? 'bg-green-100 text-green-700' :
-              status === 'fallback' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-            }`}>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                status === 'online'
+                  ? 'bg-green-100 text-green-700'
+                  : status === 'fallback'
+                  ? 'bg-yellow-100 text-yellow-700'
+                  : 'bg-red-100 text-red-700'
+              }`}
+            >
               {status === 'online' ? 'Online' : status === 'fallback' ? 'Backup' : 'Offline'}
             </span>
           )}
@@ -534,29 +594,37 @@ export default function QurankuAIPage() {
         </button>
       </div>
 
-      {/* Area konten: chat bubble atau hasil semantic search */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      {/* Area konten (chat atau hasil semantic) dengan padding bottom untuk memberi ruang */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-[160px]">
         {mode === 'chat' ? (
           <>
             {messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div
+                key={msg.id}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
                 {msg.role === 'assistant' && (
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center mr-2 mt-1">
                     <FaRobot className="w-4 h-4 text-white" />
                   </div>
                 )}
-                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'bg-[#4A8CFF] text-white rounded-br-md'
-                    : 'bg-white text-gray-800 shadow-sm rounded-bl-md'
-                }`}>
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-[#4A8CFF] text-white rounded-br-md'
+                      : 'bg-white text-gray-800 shadow-sm rounded-bl-md'
+                  }`}
+                >
                   {msg.role === 'assistant' ? (
                     <MarkdownContent content={msg.content} onNavigate={handleNavigate} />
                   ) : (
                     <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                   )}
                   <div className="text-right text-[9px] opacity-60 mt-1">
-                    {msg.timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                    {msg.timestamp.toLocaleTimeString('id-ID', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </div>
                 </div>
                 {msg.role === 'user' && (
@@ -615,15 +683,21 @@ export default function QurankuAIPage() {
         )}
       </div>
 
-      {/* Input area: sticky bottom, desain modern */}
-      <div className="bg-transparent px-4 py-3">
+      {/* Input area fixed di atas bottom navbar (asumsi tinggi navbar 70px) */}
+      <div className="fixed left-0 right-0 bottom-[70px] z-20 bg-transparent px-4 py-3">
         <div className="bg-white rounded-3xl shadow-md border border-gray-100 p-3">
           <textarea
             ref={inputRef}
             value={currentInputValue}
             onChange={(e) => setCurrentInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit())}
-            placeholder={mode === 'chat' ? "Tanyakan sesuatu..." : "Cari ayat/tafsir/doa..."}
+            onKeyDown={(e) =>
+              e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit())
+            }
+            placeholder={
+              mode === 'chat'
+                ? 'Tanyakan sesuatu...'
+                : 'Cari ayat/tafsir/doa...'
+            }
             rows={1}
             className="w-full text-sm border-0 focus:ring-0 resize-none placeholder-gray-400 outline-none bg-transparent"
           />
@@ -632,7 +706,9 @@ export default function QurankuAIPage() {
               <button
                 onClick={() => handleModeToggle('chat')}
                 className={`h-8 px-3 rounded-full text-xs font-medium transition ${
-                  mode === 'chat' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  mode === 'chat'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 Tanya AI
@@ -640,7 +716,9 @@ export default function QurankuAIPage() {
               <button
                 onClick={() => handleModeToggle('semantic')}
                 className={`h-8 px-3 rounded-full text-xs font-medium transition ${
-                  mode === 'semantic' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  mode === 'semantic'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 Cari Semantik
