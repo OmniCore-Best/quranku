@@ -296,7 +296,7 @@ export default function QurankuAIPage() {
   
     try {
       const blob = await snapdom.toBlob(wrapper, {
-        type: 'png',   
+        type: 'png',
         scale: 2,
         backgroundColor: '#ffffff',
       });
@@ -307,6 +307,57 @@ export default function QurankuAIPage() {
       document.body.removeChild(wrapper);
     }
   };
+
+// Fungsi baru yang mendukung Share API dengan fallback download
+const handleShareOrDownload = async (elementId: string, title: string) => {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    setDownloadErrorMsg('Elemen tidak ditemukan. Segarkan halaman dan coba lagi.');
+    return;
+  }
+
+  setDownloadingId(elementId);
+  setDownloadErrorMsg(null);
+  try {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const blob = await captureElementWithWatermark(element);
+    
+    // Siapkan data untuk di-share
+    const fileName = `quranku_${title.replace(/[^a-z0-9]/gi, '_')}.png`;
+    const file = new File([blob], fileName, { type: 'image/png' });
+    const shareData = {
+      title: title,
+      text: 'Dibagikan dari Quranku AI',
+      files: [file],
+    };
+
+    // Cek apakah Web Share API dengan file didukung
+    if (navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+      } catch (error) {
+        // AbortError: pengguna membatalkan share sheet, tidak perlu fallback
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Share gagal:', error);
+          setDownloadErrorMsg('Gagal membagikan gambar. Silakan coba lagi.');
+        }
+      }
+    } else {
+      // Fallback: download langsung jika Web Share API tidak didukung
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = url;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    }
+  } catch (error) {
+    console.error('Gagal:', error);
+    setDownloadErrorMsg('Gagal mengunduh gambar. Silakan coba lagi.');
+  } finally {
+    setDownloadingId(null);
+  }
+};
 
   const handleDownloadResult = async (elementId: string, title: string) => {
     const element = document.getElementById(elementId);
