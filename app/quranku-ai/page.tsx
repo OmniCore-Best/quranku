@@ -225,6 +225,14 @@ export default function QurankuAIPage() {
     }
   }, [conversations]);
 
+  // ▶️ Sinkronkan searchQuery dengan input saat mode semantic
+  //    Ini memperbaiki tombol "Cari Semantik" yang selalu disabled
+  useEffect(() => {
+    if (mode === 'semantic') {
+      setSearchQuery(input);
+    }
+  }, [mode, input]);
+
   // Auto focus & scroll
   useEffect(() => {
     if (mode === 'chat') {
