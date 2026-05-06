@@ -881,7 +881,7 @@ export default function QurankuAIPage() {
       </div>
 
       {/* Input area fixed – tidak ikut scroll */}
-      <div className="fixed left-0 right-0 bottom-0 z-20 bg-transparent px-4 py-3">
+      <div className="fixed left-0 right-0 bottom-[70px] z-20 bg-transparent px-4 py-3">
         <div className="bg-white rounded-3xl shadow-md border border-gray-100 p-3">
           <textarea
             ref={inputRef}
