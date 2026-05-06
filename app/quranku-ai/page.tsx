@@ -706,7 +706,7 @@ export default function QurankuAIPage() {
     <div className="h-dvh bg-[#F5F5F5] flex flex-col relative">
       {/* Sidebar overlay */}
       {showSidebar && (
-        <div className="fixed inset-0 z-30 bg-black bg-opacity-40" onClick={() => setShowSidebar(false)} />
+        <div className="fixed inset-0 z-30 backdrop-blur-sm bg-white/5" onClick={() => setShowSidebar(false)} />
       )}
 
       {/* Sidebar */}
