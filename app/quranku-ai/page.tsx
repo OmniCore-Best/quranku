@@ -695,7 +695,7 @@ export default function QurankuAIPage() {
   // Render UI utama
   // ----------------------------------------------------------------------
   return (
-    <div className="h-dvh flex flex-col overflow-hidden bg-[#F5F5F5] relative">
+    <div className="h-dvh bg-[#F5F5F5] flex flex-col relative">
       {/* Sidebar overlay */}
       {showSidebar && (
         <div className="fixed inset-0 z-30 bg-black bg-opacity-40" onClick={() => setShowSidebar(false)} />
@@ -785,7 +785,7 @@ export default function QurankuAIPage() {
       </div>
 
       {/* Area konten (chat atau hasil semantic) – scroll mandiri */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-2">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-32">
         {mode === 'chat' ? (
           <>
             {messages.map((msg) => (
@@ -880,8 +880,8 @@ export default function QurankuAIPage() {
         )}
       </div>
 
-      {/* Input area fixed – di dalam flex, flex-shrink-0 */}
-      <div className="flex-shrink-0 px-4 py-3 bg-white border-t border-gray-100">
+      {/* Input area fixed – tidak ikut scroll */}
+      <div className="fixed left-0 right-0 bottom-[70px] z-20 bg-transparent px-4 py-3">
         <div className="bg-white rounded-3xl shadow-md border border-gray-100 p-3">
           <textarea
             ref={inputRef}
