@@ -695,7 +695,7 @@ export default function QurankuAIPage() {
   // Render UI utama
   // ----------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-[#F5F5F5] flex flex-col relative">
+    <div className="h-dvh bg-[#F5F5F5] flex flex-col relative">
       {/* Sidebar overlay */}
       {showSidebar && (
         <div className="fixed inset-0 z-30 bg-black bg-opacity-40" onClick={() => setShowSidebar(false)} />
@@ -752,7 +752,7 @@ export default function QurankuAIPage() {
       </div>
 
       {/* Header sticky */}
-      <div className="h-14 px-4 flex items-center justify-between bg-white border-b border-gray-100 sticky top-0 z-20">
+      <div className="h-14 px-4 flex items-center justify-between bg-white border-b border-gray-100 sticky top-0 z-20 flex-shrink-0">
         <button onClick={() => setShowSidebar(true)} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100">
           <FaBars className="w-5 h-5 text-gray-700" />
         </button>
@@ -784,8 +784,8 @@ export default function QurankuAIPage() {
         </button>
       </div>
 
-      {/* Area konten (chat atau hasil semantic) */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-[160px]">
+      {/* Area konten (chat atau hasil semantic) – scroll mandiri */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-32">
         {mode === 'chat' ? (
           <>
             {messages.map((msg) => (
@@ -880,8 +880,8 @@ export default function QurankuAIPage() {
         )}
       </div>
 
-      {/* Input area */}
-      <div className="fixed left-0 right-0 bottom-[70px] z-20 bg-transparent px-4 py-3">
+      {/* Input area fixed – tidak ikut scroll */}
+      <div className="fixed left-0 right-0 bottom-0 z-20 bg-transparent px-4 py-3">
         <div className="bg-white rounded-3xl shadow-md border border-gray-100 p-3">
           <textarea
             ref={inputRef}
