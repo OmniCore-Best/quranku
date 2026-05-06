@@ -4,9 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
-  FaBars, FaPlus, FaPaperPlane, FaSpinner, FaWifi,
+  FaBars, FaPlus, FaPaperPlane, FaSpinner,
   FaExclamationTriangle, FaSearch, FaExternalLinkAlt,
-  FaShareAlt, FaRobot, FaMicrophone, FaUser,
+  FaShareAlt, FaMicrophone, FaUser, FaTimes, FaTrash,
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -25,6 +25,12 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   provider?: 'airo_hunter' | 'devnova_id';
+}
+
+interface Conversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
 }
 
 interface SearchResult {
@@ -127,14 +133,23 @@ const MarkdownContent = ({ content, onNavigate }: { content: string; onNavigate:
 export default function QurankuAIPage() {
   const router = useRouter();
 
-  // State chat
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // ---------------------------------- History ----------------------------------
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeId, setActiveId] = useState<string>('');
+  const [showSidebar, setShowSidebar] = useState(false);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // State chat saat ini (ambil dari conversations)
+  const activeConv = conversations.find(c => c.id === activeId) || conversations[0] || null;
+  const messages = activeConv?.messages ?? [];
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<'online' | 'fallback' | 'offline'>('online');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const STORAGE_KEY = 'quranku_ai_chat_history';
+  const STORAGE_KEY = 'quranku_ai_conversations';
 
   // Mode
   const [mode, setMode] = useState<'chat' | 'semantic'>('chat');
@@ -150,40 +165,65 @@ export default function QurankuAIPage() {
   const [searchTypes] = useState<string[]>(['ayat', 'tafsir', 'doa']);
   const [searchMinScore] = useState(0.4);
 
+  // Voice
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
   // ----------------------------------------------------------------------
-  // Helper: pesan selamat datang
+  // Helper: buat percakapan baru dengan pesan selamat datang
   // ----------------------------------------------------------------------
-  const getWelcomeMessage = (): ChatMessage => ({
-    id: 'welcome',
-    role: 'assistant',
-    content:
-      'Halo! Saya asisten cerdas Quranku. Saya bisa membantu Anda:\n\n' +
-      '• Mencari ayat/tafsir Al-Qur\'an\n' +
-      '• Menjawab pertanyaan Islam\n' +
-      '• Menampilkan hadis, doa, jadwal sholat, dan kalkulator zakat\n\n' +
-      'Coba tanyakan: "Cari ayat tentang kesabaran" atau "Hadis tentang keutamaan ilmu"',
-    timestamp: new Date(),
+  const createNewConversation = (): Conversation => ({
+    id: Date.now().toString(),
+    title: 'Percakapan Baru',
+    messages: [{
+      id: 'welcome',
+      role: 'assistant',
+      content:
+        'Halo! Saya asisten cerdas Quranku. Saya bisa membantu Anda:\n\n' +
+        '• Mencari ayat/tafsir Al-Qur\'an\n' +
+        '• Menjawab pertanyaan Islam\n' +
+        '• Menampilkan hadis, doa, jadwal sholat, dan kalkulator zakat\n\n' +
+        'Coba tanyakan: "Cari ayat tentang kesabaran" atau "Hadis tentang keutamaan ilmu"',
+      timestamp: new Date(),
+    }],
   });
 
-  // Load & save chat history
+  // Load conversations dari localStorage
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        const withDates = parsed.map((msg: any) => ({ ...msg, timestamp: new Date(msg.timestamp) }));
-        setMessages(withDates);
-      } catch { setMessages([getWelcomeMessage()]); }
+        const parsed: Conversation[] = JSON.parse(saved);
+        const fixed = parsed.map(conv => ({
+          ...conv,
+          messages: conv.messages.map(msg => ({ ...msg, timestamp: new Date(msg.timestamp) })),
+        }));
+        setConversations(fixed);
+        if (fixed.length > 0) {
+          setActiveId(fixed[fixed.length - 1].id);
+        } else {
+          const newConv = createNewConversation();
+          setConversations([newConv]);
+          setActiveId(newConv.id);
+        }
+      } catch {
+        const newConv = createNewConversation();
+        setConversations([newConv]);
+        setActiveId(newConv.id);
+      }
     } else {
-      setMessages([getWelcomeMessage()]);
+      const newConv = createNewConversation();
+      setConversations([newConv]);
+      setActiveId(newConv.id);
     }
   }, []);
 
+  // Simpan ke localStorage setiap conversations berubah
   useEffect(() => {
-    if (messages.length > 0 && mode === 'chat') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    if (conversations.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
     }
-  }, [messages, mode]);
+  }, [conversations]);
 
   // Auto focus & scroll
   useEffect(() => {
@@ -193,37 +233,141 @@ export default function QurankuAIPage() {
     } else {
       inputRef.current?.focus();
     }
-  }, [mode]);
+  }, [mode, messages]);
 
-  // Fungsi chat
-  const clearChat = () => {
-    setMessages([getWelcomeMessage()]);
-    localStorage.removeItem(STORAGE_KEY);
+  // Tutup sidebar jika klik di luar
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node) && showSidebar) {
+        setShowSidebar(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSidebar]);
+
+  // ----------------------------------------------------------------------
+  // Fungsi history
+  // ----------------------------------------------------------------------
+  const switchConversation = (id: string) => {
+    setActiveId(id);
+    setShowSidebar(false);
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
+
   const startNewChat = () => {
-    setMessages([getWelcomeMessage()]);
-    localStorage.removeItem(STORAGE_KEY);
+    const newConv = createNewConversation();
+    setConversations(prev => [...prev, newConv]);
+    setActiveId(newConv.id);
+    setShowSidebar(false);
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
-  const handleNavigate = (href: string) => router.push(href);
 
+  const deleteConversation = (id: string) => {
+    if (window.confirm('Hapus percakapan ini?')) {
+      const updated = conversations.filter(c => c.id !== id);
+      setConversations(updated);
+      if (activeId === id) {
+        if (updated.length > 0) {
+          setActiveId(updated[0].id);
+        } else {
+          const newConv = createNewConversation();
+          setConversations([newConv]);
+          setActiveId(newConv.id);
+        }
+      }
+    }
+  };
+
+  // Long press handler (mobile)
+  const handleTouchStart = (id: string) => {
+    longPressTimer.current = setTimeout(() => {
+      deleteConversation(id);
+    }, 800);
+  };
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  // Handler title otomatis
+  const updateConversationTitle = (convId: string, userMsg: string) => {
+    setConversations(prev =>
+      prev.map(conv => {
+        if (conv.id !== convId) return conv;
+        const hasUserMessage = conv.messages.some(m => m.role === 'user');
+        if (!hasUserMessage || conv.title === 'Percakapan Baru') {
+          let title = userMsg.trim().replace(/\n/g, ' ');
+          if (title.length > 40) title = title.slice(0, 40) + '...';
+          return { ...conv, title };
+        }
+        return conv;
+      })
+    );
+  };
+
+  // ----------------------------------------------------------------------
+  // Chat function
+  // ----------------------------------------------------------------------
   const sendChatMessage = async () => {
     if (!input.trim() || isLoading) return;
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: input, timestamp: new Date() };
-    setMessages(prev => [...prev, userMsg]);
     const currentInput = input;
+    const userMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: currentInput,
+      timestamp: new Date(),
+    };
+
+    setConversations(prev =>
+      prev.map(conv => {
+        if (conv.id !== activeId) return conv;
+        return { ...conv, messages: [...conv.messages, userMsg] };
+      })
+    );
+
+    updateConversationTitle(activeId, currentInput);
+
     setInput('');
     setIsLoading(true);
+
     const apiMessages: OpenRouterMessage[] = [
       { role: 'system', content: QURANKU_SYSTEM_PROMPT },
-      ...messages.map(m => ({ role: m.role, content: m.content })),
+      ...messages.filter(m => m.id !== 'welcome').map(m => ({ role: m.role, content: m.content })),
       { role: 'user', content: currentInput },
     ];
+
     try {
       const result = await sendMessageWithFallback(apiMessages, true);
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: result.content, timestamp: new Date(), provider: result.provider }]);
+      const assistantMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: result.content,
+        timestamp: new Date(),
+        provider: result.provider,
+      };
+      setConversations(prev =>
+        prev.map(conv => {
+          if (conv.id !== activeId) return conv;
+          return { ...conv, messages: [...conv.messages, assistantMsg] };
+        })
+      );
       setStatus(result.status);
     } catch {
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: 'Maaf, layanan AI sedang sibuk. Silakan coba lagi nanti.', timestamp: new Date() }]);
+      const errorMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Maaf, layanan AI sedang sibuk. Silakan coba lagi nanti.',
+        timestamp: new Date(),
+      };
+      setConversations(prev =>
+        prev.map(conv => {
+          if (conv.id !== activeId) return conv;
+          return { ...conv, messages: [...conv.messages, errorMsg] };
+        })
+      );
       setStatus('offline');
     } finally {
       setIsLoading(false);
@@ -252,13 +396,13 @@ export default function QurankuAIPage() {
   };
 
   // ----------------------------------------------------------------------
-  // Capture PNG dengan SnapDOM – menggunakan type: 'image/png'
+  // Capture PNG dengan SnapDOM
   // ----------------------------------------------------------------------
   const captureElementWithWatermark = async (element: HTMLElement): Promise<Blob> => {
     const wrapper = document.createElement('div');
     wrapper.style.position = 'relative';
     wrapper.style.display = 'inline-block';
-  
+
     const clone = element.cloneNode(true) as HTMLElement;
     clone.style.position = 'relative';
     clone.style.backgroundColor = '#ffffff';
@@ -266,13 +410,13 @@ export default function QurankuAIPage() {
     clone.style.padding = '16px';
     clone.style.boxShadow = 'none';
     clone.style.width = `${element.offsetWidth}px`;
-  
+
     clone.querySelectorAll('button, [role="button"]').forEach((btn) => {
       (btn as HTMLElement).style.display = 'none';
     });
-  
+
     wrapper.appendChild(clone);
-  
+
     const watermark = document.createElement('div');
     watermark.textContent = '— generated by Quranku AI';
     watermark.style.position = 'absolute';
@@ -288,19 +432,19 @@ export default function QurankuAIPage() {
     watermark.style.zIndex = '20';
     watermark.style.pointerEvents = 'none';
     wrapper.appendChild(watermark);
-  
+
     wrapper.style.position = 'fixed';
     wrapper.style.top = '0';
     wrapper.style.left = '-9999px';
     document.body.appendChild(wrapper);
-  
+
     try {
       const blob = await snapdom.toBlob(wrapper, {
         type: 'png',
         scale: 2,
         backgroundColor: '#ffffff',
       });
-  
+
       if (!blob) throw new Error('Gagal membuat gambar');
       return blob;
     } finally {
@@ -308,58 +452,7 @@ export default function QurankuAIPage() {
     }
   };
 
-// Fungsi baru yang mendukung Share API dengan fallback download
-const handleShareOrDownload = async (elementId: string, title: string) => {
-  const element = document.getElementById(elementId);
-  if (!element) {
-    setDownloadErrorMsg('Elemen tidak ditemukan. Segarkan halaman dan coba lagi.');
-    return;
-  }
-
-  setDownloadingId(elementId);
-  setDownloadErrorMsg(null);
-  try {
-    await new Promise(resolve => setTimeout(resolve, 200));
-    const blob = await captureElementWithWatermark(element);
-    
-    // Siapkan data untuk di-share
-    const fileName = `quranku_${title.replace(/[^a-z0-9]/gi, '_')}.png`;
-    const file = new File([blob], fileName, { type: 'image/png' });
-    const shareData = {
-      title: title,
-      text: 'Dibagikan dari Quranku AI',
-      files: [file],
-    };
-
-    // Cek apakah Web Share API dengan file didukung
-    if (navigator.canShare && navigator.canShare(shareData)) {
-      try {
-        await navigator.share(shareData);
-      } catch (error) {
-        // AbortError: pengguna membatalkan share sheet, tidak perlu fallback
-        if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Share gagal:', error);
-          setDownloadErrorMsg('Gagal membagikan gambar. Silakan coba lagi.');
-        }
-      }
-    } else {
-      // Fallback: download langsung jika Web Share API tidak didukung
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.download = fileName;
-      link.href = url;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 100);
-    }
-  } catch (error) {
-    console.error('Gagal:', error);
-    setDownloadErrorMsg('Gagal mengunduh gambar. Silakan coba lagi.');
-  } finally {
-    setDownloadingId(null);
-  }
-};
-
-  const handleDownloadResult = async (elementId: string, title: string) => {
+  const handleShareOrDownload = async (elementId: string, title: string) => {
     const element = document.getElementById(elementId);
     if (!element) {
       setDownloadErrorMsg('Elemen tidak ditemukan. Segarkan halaman dan coba lagi.');
@@ -371,15 +464,34 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
     try {
       await new Promise(resolve => setTimeout(resolve, 200));
       const blob = await captureElementWithWatermark(element);
+      
       const fileName = `quranku_${title.replace(/[^a-z0-9]/gi, '_')}.png`;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.download = fileName;
-      link.href = url;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 100);
+      const file = new File([blob], fileName, { type: 'image/png' });
+      const shareData = {
+        title: title,
+        text: 'Dibagikan dari Quranku AI',
+        files: [file],
+      };
+
+      if (navigator.canShare && navigator.canShare(shareData)) {
+        try {
+          await navigator.share(shareData);
+        } catch (error) {
+          if (error instanceof Error && error.name !== 'AbortError') {
+            console.error('Share gagal:', error);
+            setDownloadErrorMsg('Gagal membagikan gambar. Silakan coba lagi.');
+          }
+        }
+      } else {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = url;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+      }
     } catch (error) {
-      console.error('Download gagal:', error);
+      console.error('Gagal:', error);
       setDownloadErrorMsg('Gagal mengunduh gambar. Silakan coba lagi.');
     } finally {
       setDownloadingId(null);
@@ -407,10 +519,10 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
           className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-gray-100 relative"
         >
           <button
-            onClick={() => handleDownloadResult(uniqueId, downloadTitle)}
+            onClick={() => handleShareOrDownload(uniqueId, downloadTitle)}
             disabled={downloadingId === uniqueId}
             className="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition disabled:opacity-50"
-            title="Download sebagai gambar"
+            title="Bagikan atau simpan gambar"
           >
             {downloadingId === uniqueId ? (
               <FaSpinner className="animate-spin w-4 h-4" />
@@ -446,7 +558,7 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
           className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-gray-100 relative"
         >
           <button
-            onClick={() => handleDownloadResult(uniqueId, downloadTitle)}
+            onClick={() => handleShareOrDownload(uniqueId, downloadTitle)}
             disabled={downloadingId === uniqueId}
             className="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
           >
@@ -482,7 +594,7 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
           className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-gray-100 relative"
         >
           <button
-            onClick={() => handleDownloadResult(uniqueId, downloadTitle)}
+            onClick={() => handleShareOrDownload(uniqueId, downloadTitle)}
             disabled={downloadingId === uniqueId}
             className="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
           >
@@ -507,11 +619,12 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
     return null;
   };
 
-  // Handler submit & toggle mode
+  // Handler submit
   const handleSubmit = () => {
     if (mode === 'chat') sendChatMessage();
     else performSemanticSearch();
   };
+
   const handleModeToggle = (newMode: 'chat' | 'semantic') => {
     setMode(newMode);
     if (newMode === 'semantic') {
@@ -519,20 +632,128 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
       setSearchError(null);
     }
   };
-  const currentInputValue = mode === 'chat' ? input : searchQuery;
-  const setCurrentInputValue = (val: string) => {
-    if (mode === 'chat') setInput(val);
-    else setSearchQuery(val);
+
+  // Auto-resize textarea
+  const autoResizeTextarea = () => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      const lineHeight = 24;
+      const maxHeight = lineHeight * 6; // 144px
+      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, maxHeight)}px`;
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    autoResizeTextarea();
+  };
+
+  useEffect(() => {
+    autoResizeTextarea();
+  }, [mode, input]);
+
+  // ------------------------------ Voice to Text ------------------------------
+  const startListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Maaf, browser Anda tidak mendukung fitur ini.');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'id-ID';
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput((prev: string) => (prev + ' ' + transcript).trim());
+      autoResizeTextarea();
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
   };
 
   // ----------------------------------------------------------------------
   // Render UI utama
   // ----------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-[#F5F5F5] flex flex-col">
+    <div className="min-h-screen bg-[#F5F5F5] flex flex-col relative">
+      {/* Sidebar overlay */}
+      {showSidebar && (
+        <div className="fixed inset-0 z-30 bg-black bg-opacity-40" onClick={() => setShowSidebar(false)} />
+      )}
+
+      {/* Sidebar */}
+      <div
+        ref={sidebarRef}
+        className={`fixed top-0 left-0 h-full w-72 bg-white shadow-xl z-40 transform transition-transform duration-300 ${showSidebar ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-base font-semibold">Riwayat</h2>
+          <button onClick={() => setShowSidebar(false)} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-100">
+            <FaTimes className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="overflow-y-auto h-[calc(100%-60px)] p-3">
+          {conversations.map(conv => (
+            <div
+              key={conv.id}
+              className={`flex items-start p-3 rounded-xl mb-2 cursor-pointer ${conv.id === activeId ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+              onClick={() => switchConversation(conv.id)}
+              onTouchStart={() => handleTouchStart(conv.id)}
+              onTouchEnd={handleTouchEnd}
+              onContextMenu={(e) => { e.preventDefault(); deleteConversation(conv.id); }}
+            >
+              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 flex-shrink-0">
+                <FaUser className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{conv.title}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {conv.messages.length > 0
+                    ? `${conv.messages.filter(m => m.role === 'user').length} pesan`
+                    : 'Belum ada pesan'}
+                </p>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id); }}
+                className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 ml-1"
+                title="Hapus"
+              >
+                <FaTrash className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={startNewChat}
+            className="w-full mt-3 flex items-center justify-center gap-1 py-2.5 rounded-xl border-2 border-dashed border-gray-300 text-gray-600 hover:bg-gray-50 text-sm"
+          >
+            <FaPlus className="w-3 h-3" /> Percakapan Baru
+          </button>
+        </div>
+      </div>
+
       {/* Header sticky */}
       <div className="h-14 px-4 flex items-center justify-between bg-white border-b border-gray-100 sticky top-0 z-20">
-        <button className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100">
+        <button onClick={() => setShowSidebar(true)} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100">
           <FaBars className="w-5 h-5 text-gray-700" />
         </button>
         <div className="flex items-center gap-2">
@@ -558,10 +779,7 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
             </span>
           )}
         </div>
-        <button
-          onClick={mode === 'chat' ? startNewChat : () => setSearchResults([])}
-          className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100"
-        >
+        <button onClick={startNewChat} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100">
           <FaPlus className="w-5 h-5 text-gray-700" />
         </button>
       </div>
@@ -571,32 +789,28 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
         {mode === 'chat' ? (
           <>
             {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
+              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center mr-2 mt-1">
-                    <FaRobot className="w-4 h-4 text-white" />
+                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-2 mt-1 shadow-sm border border-gray-200">
+                    <Image
+                      src="/icons/icon-512x512.png"
+                      alt="Quranku"
+                      width={24}
+                      height={24}
+                      className="rounded-full"
+                    />
                   </div>
                 )}
-                <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-[#4A8CFF] text-white rounded-br-md'
-                      : 'bg-white text-gray-800 shadow-sm rounded-bl-md'
-                  }`}
-                >
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                  msg.role === 'user' ? 'bg-[#4A8CFF] text-white rounded-br-md' : 'bg-white text-gray-800 shadow-sm rounded-bl-md'
+                }`}>
                   {msg.role === 'assistant' ? (
-                    <MarkdownContent content={msg.content} onNavigate={handleNavigate} />
+                    <MarkdownContent content={msg.content} onNavigate={(href) => router.push(href)} />
                   ) : (
                     <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                   )}
                   <div className="text-right text-[9px] opacity-60 mt-1">
-                    {msg.timestamp.toLocaleTimeString('id-ID', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {msg.timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
                 {msg.role === 'user' && (
@@ -608,8 +822,8 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
             ))}
             {isLoading && (
               <div className="flex justify-start">
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center mr-2">
-                  <FaSpinner className="animate-spin text-white w-4 h-4" />
+                <div className="w-8 h-8 rounded-full bg-white border flex items-center justify-center mr-2">
+                  <Image src="/icons/icon-512x512.png" width={24} height={24} alt="Quranku" className="rounded-full animate-pulse" />
                 </div>
                 <div className="bg-white rounded-2xl rounded-bl-md px-4 py-2.5 text-sm text-gray-500 shadow-sm">
                   AI sedang mengetik...
@@ -666,32 +880,24 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
         )}
       </div>
 
-      {/* Input area fixed di atas bottom navbar (asumsi tinggi navbar 70px) */}
+      {/* Input area */}
       <div className="fixed left-0 right-0 bottom-[70px] z-20 bg-transparent px-4 py-3">
         <div className="bg-white rounded-3xl shadow-md border border-gray-100 p-3">
           <textarea
             ref={inputRef}
-            value={currentInputValue}
-            onChange={(e) => setCurrentInputValue(e.target.value)}
-            onKeyDown={(e) =>
-              e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit())
-            }
-            placeholder={
-              mode === 'chat'
-                ? 'Tanyakan sesuatu...'
-                : 'Cari ayat/tafsir/doa...'
-            }
+            value={input}
+            onChange={handleInputChange}
+            placeholder={mode === 'chat' ? 'Tanyakan sesuatu...' : 'Cari ayat/tafsir/doa...'}
             rows={1}
-            className="w-full text-sm border-0 focus:ring-0 resize-none placeholder-gray-400 outline-none bg-transparent"
+            className="w-full text-sm border-0 focus:ring-0 resize-none placeholder-gray-400 outline-none bg-transparent overflow-y-auto"
+            style={{ maxHeight: '144px' }}
           />
           <div className="flex items-center justify-between mt-2">
             <div className="flex gap-2">
               <button
                 onClick={() => handleModeToggle('chat')}
                 className={`h-8 px-3 rounded-full text-xs font-medium transition ${
-                  mode === 'chat'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  mode === 'chat' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 Tanya AI
@@ -699,23 +905,27 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
               <button
                 onClick={() => handleModeToggle('semantic')}
                 className={`h-8 px-3 rounded-full text-xs font-medium transition ${
-                  mode === 'semantic'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  mode === 'semantic' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 Cari Semantik
               </button>
             </div>
             <div className="flex gap-2">
-              <button className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200">
-                <FaMicrophone className="w-4 h-4 text-gray-600" />
+              <button
+                onClick={startListening}
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition ${
+                  isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                title={isListening ? 'Mendengarkan...' : 'Suara ke teks'}
+              >
+                <FaMicrophone className="w-4 h-4" />
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={
-                  (mode === 'chat' && (!currentInputValue.trim() || isLoading)) ||
-                  (mode === 'semantic' && (!currentInputValue.trim() || searchLoading))
+                  (mode === 'chat' && (!input.trim() || isLoading)) ||
+                  (mode === 'semantic' && (!searchQuery.trim() || searchLoading))
                 }
                 className="w-9 h-9 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-40 transition"
               >
@@ -725,7 +935,7 @@ const handleShareOrDownload = async (elementId: string, title: string) => {
           </div>
         </div>
         <p className="text-center text-[10px] text-gray-400 mt-2">
-          {mode === 'chat' ? 'Enter kirim, Shift+Enter baris baru' : 'Enter cari'}
+          {mode === 'chat' ? 'Enter baris baru, tombol untuk kirim' : 'Enter baris baru, tombol untuk cari'}
         </p>
       </div>
     </div>
