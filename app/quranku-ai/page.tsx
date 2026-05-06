@@ -826,7 +826,7 @@ export default function QurankuAIPage() {
                   <Image src="/icons/icon-512x512.png" width={24} height={24} alt="Quranku" className="rounded-full animate-pulse" />
                 </div>
                 <div className="bg-white rounded-2xl rounded-bl-md px-4 py-2.5 text-sm text-gray-500 shadow-sm">
-                  AI sedang mengetik...
+                  Berfikir...
                 </div>
               </div>
             )}
