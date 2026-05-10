@@ -162,8 +162,9 @@ export default function QurankuAIPage() {
   // State untuk mode telvon
   const [callActive, setCallActive] = useState(false);
   const [telvonStatus, setTelvonStatus] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
-  const [telvonError, setTelvonError] = useState<string | null>(null); // ✅ baru: error telvon
+  const [telvonError, setTelvonError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   // ----------------------------------------------------------------------
@@ -325,20 +326,45 @@ export default function QurankuAIPage() {
     }
     const recognition = new SpeechRecognition();
     recognition.lang = 'id-ID';
-    recognition.continuous = true;
-    recognition.interimResults = false;
+    recognition.continuous = false; // restart otomatis setelah selesai
+    recognition.interimResults = true; // penting agar onresult terpicu
     recognition.maxAlternatives = 1;
 
-    recognition.onresult = async (event: any) => {
-      const transcript = event.results[event.results.length - 1][0].transcript;
-      if (transcript && transcript.trim()) {
+    // Silence timeout: 10 detik tanpa suara
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current = setTimeout(() => {
+      if (callActive && telvonStatus === 'listening') {
+        recognition.stop();
+        setTelvonError('Tidak mendeteksi suara. Silakan bicara lagi.');
+        setTimeout(() => {
+          setTelvonError(null);
+          if (callActive) startContinuousListening();
+        }, 2500);
+      }
+    }, 10000);
+
+    recognition.onresult = (event: any) => {
+      // Hapus silence timer karena ada suara
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          transcript += event.results[i][0].transcript;
+        }
+      }
+      if (transcript.trim()) {
         recognition.stop();
         setTelvonStatus('thinking');
-        await sendChatMessage(transcript, true);
+        sendChatMessage(transcript.trim(), true);
       }
     };
+
     recognition.onerror = (event: any) => {
       console.error('Recognition error:', event.error);
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       if (event.error === 'not-allowed' || event.error === 'audio-capture') {
         setTelvonError('Mikrofon tidak diizinkan. Silakan izinkan akses mikrofon di pengaturan browser.');
         setCallActive(false);
@@ -349,11 +375,13 @@ export default function QurankuAIPage() {
         setTimeout(() => startContinuousListening(), 1000);
       }
     };
+
     recognition.onend = () => {
       if (callActive && !isSpeaking && telvonStatus === 'listening') {
         startContinuousListening();
       }
     };
+
     recognitionRef.current = recognition;
     recognition.start();
   };
@@ -363,9 +391,12 @@ export default function QurankuAIPage() {
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
   };
 
-  // ✅ Minta izin mikrofon sebelum memulai panggilan
   const startCall = async () => {
     setTelvonError(null);
     try {
@@ -385,12 +416,14 @@ export default function QurankuAIPage() {
     if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
     setIsSpeaking(false);
     setTelvonStatus('idle');
+    setTelvonError(null);
   };
 
   useEffect(() => {
     if (mode !== 'telvon' && callActive) endCall();
     return () => {
       if (recognitionRef.current) recognitionRef.current.stop();
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       window.speechSynthesis.cancel();
     };
   }, [mode, callActive]);
@@ -676,7 +709,7 @@ export default function QurankuAIPage() {
             <p className="text-sm text-gray-500 mt-2">
               {callActive ? 'Anda bisa bicara secara langsung. AI akan merespon dengan suara.' : 'Tekan tombol di bawah untuk memulai panggilan suara dengan AI.'}
             </p>
-            {/* ✅ Tampilkan error telvon di sini */}
+            {/* Tampilkan error telvon di sini */}
             {telvonError && (
               <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm max-w-xs">
                 <FaExclamationTriangle className="inline mr-2" />
