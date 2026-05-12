@@ -6,8 +6,7 @@ import Image from 'next/image';
 import {
   FaBars, FaPlus, FaPaperPlane, FaSpinner,
   FaExclamationTriangle, FaSearch, FaExternalLinkAlt,
-  FaShareAlt, FaMicrophone, FaUser, FaTimes, FaTrash,
-  FaPhoneAlt, FaPhoneSlash,
+  FaShareAlt, FaUser, FaTimes, FaTrash
 } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -109,20 +108,6 @@ const MarkdownContent = ({ content, onNavigate }: { content: string; onNavigate:
 );
 
 // ----------------------------------------------------------------------
-// Helper: strip markdown untuk TTS
-// ----------------------------------------------------------------------
-const stripMarkdown = (markdown: string): string => {
-  let text = markdown.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
-  text = text.replace(/!\[([^\]]*)\]\([^\)]+\)/g, '');
-  text = text.replace(/`{1,3}[^`]*`{1,3}/g, '');
-  text = text.replace(/^#{1,6}\s+/gm, '');
-  text = text.replace(/^[\-\*]{3,}\s*$/gm, '');
-  text = text.replace(/(\*\*|__)(.*?)\1/g, '$2');
-  text = text.replace(/(\*|_)(.*?)\1/g, '$2');
-  return text.trim();
-};
-
-// ----------------------------------------------------------------------
 // Komponen utama
 // ----------------------------------------------------------------------
 export default function QurankuAIPage() {
@@ -145,8 +130,8 @@ export default function QurankuAIPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const STORAGE_KEY = 'quranku_ai_conversations';
 
-  // Mode: chat, semantic, atau telvon
-  const [mode, setMode] = useState<'chat' | 'semantic' | 'telvon'>('chat');
+  // Mode: chat atau semantic
+  const [mode, setMode] = useState<'chat' | 'semantic'>('chat');
 
   // Semantic search
   const [searchQuery, setSearchQuery] = useState('');
@@ -158,43 +143,6 @@ export default function QurankuAIPage() {
   const [searchLimit] = useState(5);
   const [searchTypes] = useState<string[]>(['ayat', 'tafsir', 'doa']);
   const [searchMinScore] = useState(0.4);
-
-  // State untuk mode telvon
-  const [callActive, setCallActive] = useState(false);
-  const [telvonStatus, setTelvonStatus] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
-  const [telvonError, setTelvonError] = useState<string | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-
-  // ----------------------------------------------------------------------
-  // Fungsi Text-to-Speech (kecepatan 1.2, pitch 1.4)
-  // ----------------------------------------------------------------------
-  const speakText = (text: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-      const plainText = stripMarkdown(text);
-      if (!plainText.trim()) {
-        resolve();
-        return;
-      }
-      const utterance = new SpeechSynthesisUtterance(plainText);
-      utterance.lang = 'id-ID';
-      utterance.rate = 1.2;
-      utterance.pitch = 1.4;
-      utterance.volume = 1;
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        resolve();
-      };
-      utterance.onerror = (e) => {
-        setIsSpeaking(false);
-        reject(e);
-      };
-      window.speechSynthesis.speak(utterance);
-    });
-  };
 
   // ----------------------------------------------------------------------
   // Fungsi percakapan (chat teks)
@@ -236,16 +184,9 @@ export default function QurankuAIPage() {
   }, [mode, input]);
 
   useEffect(() => {
-    if (mode === 'chat') inputRef.current?.focus();
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (mode === 'chat') inputRef.current?.focus();
   }, [mode, messages]);
-
-  // Reset error saat keluar mode telvon
-  useEffect(() => {
-    if (mode !== 'telvon') {
-      setTelvonError(null);
-    }
-  }, [mode]);
 
   // Sidebar handlers
   const switchConversation = (id: string) => { setActiveId(id); setShowSidebar(false); setTimeout(() => inputRef.current?.focus(), 100); };
@@ -274,8 +215,7 @@ export default function QurankuAIPage() {
     }));
   };
 
-  // Fungsi mengirim pesan (digunakan oleh chat teks dan mode telvon)
-  const sendChatMessage = async (text: string, fromVoice: boolean = false) => {
+  const sendChatMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, timestamp: new Date() };
     setConversations(prev => prev.map(conv => conv.id === activeId ? { ...conv, messages: [...conv.messages, userMsg] } : conv));
@@ -292,141 +232,14 @@ export default function QurankuAIPage() {
       const assistantMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: result.content, timestamp: new Date(), provider: result.provider };
       setConversations(prev => prev.map(conv => conv.id === activeId ? { ...conv, messages: [...conv.messages, assistantMsg] } : conv));
       setStatus(result.status);
-      if (mode === 'telvon' && callActive) {
-        setTelvonStatus('speaking');
-        await speakText(result.content);
-        setTelvonStatus('listening');
-        startContinuousListening();
-      }
     } catch {
       const errorMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: 'Maaf, layanan AI sedang sibuk. Silakan coba lagi nanti.', timestamp: new Date() };
       setConversations(prev => prev.map(conv => conv.id === activeId ? { ...conv, messages: [...conv.messages, errorMsg] } : conv));
       setStatus('offline');
-      if (mode === 'telvon' && callActive) {
-        await speakText('Maaf, layanan sedang sibuk.');
-        setTelvonStatus('listening');
-        startContinuousListening();
-      }
     } finally {
       setIsLoading(false);
     }
   };
-
-  // ----------------------------------------------------------------------
-  // Mode Telvon: continuous speech recognition
-  // ----------------------------------------------------------------------
-  const startContinuousListening = () => {
-    if (!callActive || telvonStatus !== 'listening') return;
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setTelvonError('Browser Anda tidak mendukung pengenalan suara. Silakan gunakan Chrome.');
-      setCallActive(false);
-      setTelvonStatus('idle');
-      return;
-    }
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'id-ID';
-    recognition.continuous = false; // restart otomatis setelah selesai
-    recognition.interimResults = true; // penting agar onresult terpicu
-    recognition.maxAlternatives = 1;
-
-    // Silence timeout: 10 detik tanpa suara
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    silenceTimerRef.current = setTimeout(() => {
-      if (callActive && telvonStatus === 'listening') {
-        recognition.stop();
-        setTelvonError('Tidak mendeteksi suara. Silakan bicara lagi.');
-        setTimeout(() => {
-          setTelvonError(null);
-          if (callActive) startContinuousListening();
-        }, 2500);
-      }
-    }, 10000);
-
-    recognition.onresult = (event: any) => {
-      // Hapus silence timer karena ada suara
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
-      let transcript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          transcript += event.results[i][0].transcript;
-        }
-      }
-      if (transcript.trim()) {
-        recognition.stop();
-        setTelvonStatus('thinking');
-        sendChatMessage(transcript.trim(), true);
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error('Recognition error:', event.error);
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      if (event.error === 'not-allowed' || event.error === 'audio-capture') {
-        setTelvonError('Mikrofon tidak diizinkan. Silakan izinkan akses mikrofon di pengaturan browser.');
-        setCallActive(false);
-        setTelvonStatus('idle');
-        return;
-      }
-      if (callActive && !isSpeaking && telvonStatus === 'listening') {
-        setTimeout(() => startContinuousListening(), 1000);
-      }
-    };
-
-    recognition.onend = () => {
-      if (callActive && !isSpeaking && telvonStatus === 'listening') {
-        startContinuousListening();
-      }
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  };
-
-  const stopContinuousListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-  };
-
-  const startCall = async () => {
-    setTelvonError(null);
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      setTelvonError('Mikrofon tidak diizinkan. Silakan izinkan akses mikrofon.');
-      return;
-    }
-    setCallActive(true);
-    setTelvonStatus('listening');
-    startContinuousListening();
-  };
-
-  const endCall = () => {
-    setCallActive(false);
-    stopContinuousListening();
-    if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-    setIsSpeaking(false);
-    setTelvonStatus('idle');
-    setTelvonError(null);
-  };
-
-  useEffect(() => {
-    if (mode !== 'telvon' && callActive) endCall();
-    return () => {
-      if (recognitionRef.current) recognitionRef.current.stop();
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      window.speechSynthesis.cancel();
-    };
-  }, [mode, callActive]);
 
   // ----------------------------------------------------------------------
   // Semantic search
@@ -590,20 +403,13 @@ export default function QurankuAIPage() {
   };
 
   const handleSubmit = () => {
-    if (mode === 'chat') sendChatMessage(input, false);
+    if (mode === 'chat') sendChatMessage(input);
     else if (mode === 'semantic') performSemanticSearch();
   };
 
-  const handleModeToggle = (newMode: 'chat' | 'semantic' | 'telvon') => {
-    if (newMode === 'telvon') {
-      setMode('telvon');
-      setSearchResults([]);
-    } else {
-      if (callActive) endCall();
-      setMode(newMode);
-      if (newMode === 'semantic') setSearchResults([]);
-      setTelvonError(null);
-    }
+  const handleModeToggle = (newMode: 'chat' | 'semantic') => {
+    setMode(newMode);
+    if (newMode === 'semantic') setSearchResults([]);
   };
 
   // Auto-resize textarea
@@ -697,55 +503,26 @@ export default function QurankuAIPage() {
             {!searchQuery && !searchLoading && !searchError && <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl"><FaSearch className="w-8 h-8 mx-auto mb-2" /><p className="text-sm">Cari ayat, tafsir, atau doa dengan bahasa natural</p><p className="text-xs mt-1">Contoh: "ayat tentang kesabaran"</p></div>}
           </div>
         )}
-
-        {mode === 'telvon' && (
-          <div className="flex flex-col items-center justify-center h-full">
-            <div className={`w-40 h-40 rounded-full flex items-center justify-center transition-all duration-300 ${callActive ? (isSpeaking ? 'bg-green-500 animate-pulse' : telvonStatus === 'listening' ? 'bg-blue-500 animate-pulse' : 'bg-gray-400') : 'bg-gray-300'}`}>
-              <FaMicrophone className={`text-white text-6xl ${telvonStatus === 'listening' && callActive ? 'animate-ping' : ''}`} />
-            </div>
-            <p className="mt-6 text-lg font-semibold">
-              {callActive ? (isSpeaking ? 'AI sedang berbicara...' : telvonStatus === 'listening' ? 'Mendengarkan...' : 'Memproses...') : 'Mode Telepon'}
-            </p>
-            <p className="text-sm text-gray-500 mt-2">
-              {callActive ? 'Anda bisa bicara secara langsung. AI akan merespon dengan suara.' : 'Tekan tombol di bawah untuk memulai panggilan suara dengan AI.'}
-            </p>
-            {/* Tampilkan error telvon di sini */}
-            {telvonError && (
-              <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm max-w-xs">
-                <FaExclamationTriangle className="inline mr-2" />
-                {telvonError}
-              </div>
-            )}
-            {!callActive ? (
-              <button onClick={startCall} className="mt-8 bg-green-600 text-white px-8 py-3 rounded-full flex items-center gap-2 text-lg font-semibold shadow-lg"><FaPhoneAlt /> Mulai Panggilan</button>
-            ) : (
-              <button onClick={endCall} className="mt-8 bg-red-600 text-white px-8 py-3 rounded-full flex items-center gap-2 text-lg font-semibold shadow-lg"><FaPhoneSlash /> Akhiri Panggilan</button>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Input area (hanya untuk mode chat dan semantic) */}
-      {mode !== 'telvon' && (
-        <div className="fixed left-0 right-0 bottom-[70px] z-20 bg-transparent px-4 py-3">
-          <div className="bg-white rounded-3xl shadow-md border border-gray-100 p-3">
-            <textarea ref={inputRef} value={input} onChange={(e) => { setInput(e.target.value); autoResizeTextarea(); }} placeholder={mode === 'chat' ? 'Tanyakan sesuatu...' : 'Cari ayat/tafsir/doa...'} rows={1} className="w-full text-sm border-0 focus:ring-0 resize-none placeholder-gray-400 outline-none bg-transparent overflow-y-auto" style={{ maxHeight: '144px' }} />
-            <div className="flex items-center justify-between mt-2">
-              <div className="flex gap-2">
-                <button onClick={() => handleModeToggle('chat')} className={`h-8 px-3 rounded-full text-xs font-medium transition ${mode === 'chat' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Tanya AI</button>
-                <button onClick={() => handleModeToggle('semantic')} className={`h-8 px-3 rounded-full text-xs font-medium transition ${mode === 'semantic' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Cari Semantik</button>
-                <button onClick={() => handleModeToggle('telvon')} className={`h-8 px-3 rounded-full text-xs font-medium transition ${(mode as string) === 'telvon' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Mode Telvon</button>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={handleSubmit} disabled={(mode === 'chat' && (!input.trim() || isLoading)) || (mode === 'semantic' && (!searchQuery.trim() || searchLoading))} className="w-9 h-9 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-40 transition">
-                  {mode === 'chat' ? <FaPaperPlane className="w-4 h-4" /> : <FaSearch className="w-4 h-4" />}
-                </button>
-              </div>
+      {/* Input area */}
+      <div className="fixed left-0 right-0 bottom-[70px] z-20 bg-transparent px-4 py-3">
+        <div className="bg-white rounded-3xl shadow-md border border-gray-100 p-3">
+          <textarea ref={inputRef} value={input} onChange={(e) => { setInput(e.target.value); autoResizeTextarea(); }} placeholder={mode === 'chat' ? 'Tanyakan sesuatu...' : 'Cari ayat/tafsir/doa...'} rows={1} className="w-full text-sm border-0 focus:ring-0 resize-none placeholder-gray-400 outline-none bg-transparent overflow-y-auto" style={{ maxHeight: '144px' }} />
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex gap-2">
+              <button onClick={() => handleModeToggle('chat')} className={`h-8 px-3 rounded-full text-xs font-medium transition ${mode === 'chat' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Tanya AI</button>
+              <button onClick={() => handleModeToggle('semantic')} className={`h-8 px-3 rounded-full text-xs font-medium transition ${mode === 'semantic' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Cari Semantik</button>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleSubmit} disabled={(mode === 'chat' && (!input.trim() || isLoading)) || (mode === 'semantic' && (!searchQuery.trim() || searchLoading))} className="w-9 h-9 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-40 transition">
+                {mode === 'chat' ? <FaPaperPlane className="w-4 h-4" /> : <FaSearch className="w-4 h-4" />}
+              </button>
             </div>
           </div>
-          <p className="text-center text-[10px] text-gray-400 mt-2">{mode === 'chat' ? 'Enter baris baru, tombol untuk kirim' : 'Enter baris baru, tombol untuk cari'}</p>
         </div>
-      )}
+        <p className="text-center text-[10px] text-gray-400 mt-2">{mode === 'chat' ? 'Enter baris baru, tombol untuk kirim' : 'Enter baris baru, tombol untuk cari'}</p>
+      </div>
     </div>
   );
 }
