@@ -130,7 +130,7 @@ export default function QurankuAIPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const STORAGE_KEY = 'quranku_ai_conversations';
 
-  // Mode: chat atau semantic
+  // Mode: chat atau semantic (mode telvon sudah dihapus)
   const [mode, setMode] = useState<'chat' | 'semantic'>('chat');
 
   // Semantic search
@@ -505,7 +505,7 @@ export default function QurankuAIPage() {
         )}
       </div>
 
-      {/* Input area */}
+      {/* Input area - hanya dua mode: Tanya AI & Cari Semantik */}
       <div className="fixed left-0 right-0 bottom-[70px] z-20 bg-transparent px-4 py-3">
         <div className="bg-white rounded-3xl shadow-md border border-gray-100 p-3">
           <textarea ref={inputRef} value={input} onChange={(e) => { setInput(e.target.value); autoResizeTextarea(); }} placeholder={mode === 'chat' ? 'Tanyakan sesuatu...' : 'Cari ayat/tafsir/doa...'} rows={1} className="w-full text-sm border-0 focus:ring-0 resize-none placeholder-gray-400 outline-none bg-transparent overflow-y-auto" style={{ maxHeight: '144px' }} />
