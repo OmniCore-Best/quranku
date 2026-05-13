@@ -129,6 +129,7 @@ export default function QurankuAIPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const STORAGE_KEY = 'quranku_ai_conversations';
+  const SEARCH_CACHE_KEY = 'quranku_ai_search_cache';
 
   // Mode: chat atau semantic (mode telvon sudah dihapus)
   const [mode, setMode] = useState<'chat' | 'semantic'>('chat');
@@ -145,6 +146,31 @@ export default function QurankuAIPage() {
   const [searchMinScore] = useState(0.4);
 
   // ----------------------------------------------------------------------
+  // Load mode dan hasil pencarian dari localStorage
+  // ----------------------------------------------------------------------
+  useEffect(() => {
+    const cached = localStorage.getItem(SEARCH_CACHE_KEY);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.mode) setMode(parsed.mode);
+        if (parsed.searchQuery) {
+          setSearchQuery(parsed.searchQuery);
+          if (parsed.mode === 'semantic') setInput(parsed.searchQuery);
+        }
+        if (parsed.searchResults) setSearchResults(parsed.searchResults);
+      } catch { /* abaikan jika JSON tidak valid */ }
+    }
+  }, []);
+
+  // ----------------------------------------------------------------------
+  // Simpan mode, query, dan hasil pencarian ke localStorage
+  // ----------------------------------------------------------------------
+  useEffect(() => {
+    localStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify({ mode, searchQuery, searchResults }));
+  }, [mode, searchQuery, searchResults]);
+
+  // ----------------------------------------------------------------------
   // Fungsi percakapan (chat teks)
   // ----------------------------------------------------------------------
   const createNewConversation = (): Conversation => ({
@@ -158,7 +184,7 @@ export default function QurankuAIPage() {
     }],
   });
 
-  // Load & simpan localStorage
+  // Load & simpan localStorage untuk percakapan
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -409,7 +435,10 @@ export default function QurankuAIPage() {
 
   const handleModeToggle = (newMode: 'chat' | 'semantic') => {
     setMode(newMode);
-    if (newMode === 'semantic') setSearchResults([]);
+    if (newMode === 'semantic') {
+      // Fokus ke input setelah berganti mode
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
   };
 
   // Auto-resize textarea
