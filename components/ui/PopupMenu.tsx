@@ -4,16 +4,15 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { RiRobot3Line } from "react-icons/ri";
-
-// Heroicons – Solid
-import {
+import { 
   CodeBracketIcon,
   BookOpenIcon,
-  CalculatorIcon,        
+  CalculatorIcon,
   DocumentTextIcon,
   MagnifyingGlassIcon,
   UserIcon,
   Cog6ToothIcon,
+  CloudArrowDownIcon
 } from '@heroicons/react/24/solid';
 
 interface PopupItem {
@@ -25,52 +24,14 @@ interface PopupItem {
 }
 
 const popupMenuItems: PopupItem[] = [
-  { 
-    id: 1, 
-    name: 'Developer',
-    icon: <CodeBracketIcon className="w-5 h-5" />,
-    comingSoon: false, 
-    href: '/developer' 
-  },
-  {
-    id: 2, 
-    name: 'Hadist',
-    icon: <BookOpenIcon className="w-5 h-5" />, 
-    comingSoon: false, 
-    href: '/hadist' 
-  },
-  { 
-    id: 3, 
-    name: 'Kalkulator Zakat',         
-    icon: <CalculatorIcon className="w-5 h-5" />,
-    comingSoon: false, 
-    href: '/kalkulator-zakat'             
-  },
-  { 
-    id: 4, 
-    name: 'Quranku AI', 
-    icon: <RiRobot3Line className="w-5 h-5" />, 
-    comingSoon: false,
-    href: '/quranku-ai'
-  },
-  { 
-    id: 5, 
-    name: 'Cari', 
-    icon: <MagnifyingGlassIcon className="w-5 h-5" />, 
-    comingSoon: true 
-  },
-  { 
-    id: 6, 
-    name: 'Profil', 
-    icon: <UserIcon className="w-5 h-5" />, 
-    comingSoon: true 
-  },
-  { 
-    id: 7, 
-    name: 'Setelan', 
-    icon: <Cog6ToothIcon className="w-5 h-5" />, 
-    comingSoon: true 
-  },
+  { id: 1, name: 'Developer', icon: <CodeBracketIcon className="w-5 h-5" />, comingSoon: false, href: '/developer' },
+  { id: 2, name: 'Hadist', icon: <BookOpenIcon className="w-5 h-5" />, comingSoon: false, href: '/hadist' },
+  { id: 3, name: 'Kalkulator Zakat', icon: <CalculatorIcon className="w-5 h-5" />, comingSoon: false, href: '/kalkulator-zakat' },
+  { id: 4, name: 'Quranku AI', icon: <RiRobot3Line className="w-5 h-5" />, comingSoon: false, href: '/quranku-ai' },
+  { id: 5, name: 'Download Manager', icon: <CloudArrowDownIcon className="w-5 h-5" />, comingSoon: false, href: '/download' },
+  { id: 6, name: 'Cari', icon: <MagnifyingGlassIcon className="w-5 h-5" />, comingSoon: true },
+  { id: 7, name: 'Profil', icon: <UserIcon className="w-5 h-5" />, comingSoon: true },
+  { id: 8, name: 'Setelan', icon: <Cog6ToothIcon className="w-5 h-5" />, comingSoon: true },
 ];
 
 interface PopupMenuProps {
@@ -109,6 +70,8 @@ const PopupMenu: React.FC<PopupMenuProps> = ({ onClose }) => {
               className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${
                 item.comingSoon
                   ? 'bg-gray-100 text-gray-400'
+                  : item.id === 5
+                  ? 'bg-emerald-50 text-emerald-600'
                   : 'bg-blue-50 text-blue-600'
               }`}
             >
