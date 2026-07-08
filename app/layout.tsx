@@ -92,15 +92,13 @@ export default function RootLayout({
         <meta property="og:url" content="https://quranku.devnova.icu" />
         <meta property="og:image" content="https://quranku.devnova.icu/icons/icon-512x512.png" />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50`}>
         <main className="min-h-screen pb-20">
           {children}
         </main>
         <BottomNav />
         <ServiceWorkerRegistration />
-        <InstallPrompt /> 
+        <InstallPrompt />
         <Toaster position="top-center" richColors />
       </body>
     </html>

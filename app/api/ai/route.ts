@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Environment variables 
 const AIRO_HUNTER_API_KEY = process.env.AIRO_HUNTER_API_KEY;
 const OPENROUTER_KEYS = [
   process.env.DEVNOVA_ID_API_KEY_1,
@@ -11,26 +10,22 @@ const OPENROUTER_KEYS = [
   process.env.DEVNOVA_ID_API_KEY_6,
 ].filter(Boolean) as string[];
 
-// Fallback key jika array kosong
 const OPENROUTER_FALLBACK = process.env.DEVNOVA_ID_API_KEY;
 if (OPENROUTER_KEYS.length === 0 && OPENROUTER_FALLBACK) {
   OPENROUTER_KEYS.push(OPENROUTER_FALLBACK);
 }
 
-// Daftar origin yang diizinkan
 const ALLOWED_ORIGINS = [
   'https://quranku.devnova.icu',
   'https://quranku-test.vercel.app',
 ];
 
-// Interface untuk pesan
 interface Message {
   role: string;
   content: string;
   reasoning_details?: any;
 }
 
-// ==================== Helper CORS ====================
 function getCorsHeaders(origin: string | null): Record<string, string> {
   const isAllowed = origin && ALLOWED_ORIGINS.includes(origin);
   return {
@@ -41,7 +36,6 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-// ==================== Airo Hunter ====================
 async function sendToAiroHunter(messages: Message[]): Promise<string> {
   if (!AIRO_HUNTER_API_KEY) {
     throw new Error('Airo Hunter API key not configured on server');
@@ -63,7 +57,6 @@ async function sendToAiroHunter(messages: Message[]): Promise<string> {
   return data.result.response || data.result;
 }
 
-// ==================== DevNova ID  ====================
 async function sendToDevNovaID(messages: Message[], retryAttempt = 0): Promise<{ content: string; reasoning_details?: any }> {
   if (OPENROUTER_KEYS.length === 0) throw new Error('No DevNova keys configured');
   const currentKey = OPENROUTER_KEYS[retryAttempt % OPENROUTER_KEYS.length];
@@ -76,7 +69,7 @@ async function sendToDevNovaID(messages: Message[], retryAttempt = 0): Promise<{
       'X-Title': 'Quranku AI Chat',
     },
     body: JSON.stringify({
-      model: 'openai/gpt-oss-120b:free',
+      model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
       messages,
       reasoning: { enabled: true },
       max_tokens: 1000,
@@ -102,18 +95,15 @@ async function sendToDevNovaID(messages: Message[], retryAttempt = 0): Promise<{
   };
 }
 
-// ==================== Handler OPTIONS (CORS preflight) ====================
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get('origin');
   const headers = getCorsHeaders(origin);
   return new NextResponse(null, { status: 204, headers });
 }
 
-// ==================== Handler POST ====================
 export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin');
   
-  // Validasi origin
   if (!origin || !ALLOWED_ORIGINS.includes(origin)) {
     return new NextResponse(
       JSON.stringify({ error: 'Origin not allowed' }),
@@ -132,7 +122,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Coba Airo Hunter dulu
     try {
       const content = await sendToAiroHunter(messages.filter(m => m.role !== 'system'));
       return NextResponse.json(
@@ -144,7 +133,6 @@ export async function POST(request: NextRequest) {
         { headers: getCorsHeaders(origin) }
       );
     } catch (airoError) {
-      // Fallback ke DevNova
       try {
         const result = await sendToDevNovaID(messages);
         return NextResponse.json(
